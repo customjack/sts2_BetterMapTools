@@ -1,0 +1,7 @@
+{
+  "pck_name": "RoutingHelper",
+  "name": "RoutingHelper",
+  "author": "Jack Carlton",
+  "description": "Map routing assistant with optimize-and-highlight route planning from your current map position.",
+  "version": "1.0.0"
+}
