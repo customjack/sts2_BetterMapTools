@@ -1,6 +1,6 @@
 using Godot;
 
-namespace RoutingHelper.Features.MapRouting.Modals;
+namespace BetterMapTools.Features.MapRouting.Modals;
 
 internal static class MapModalLayout
 {

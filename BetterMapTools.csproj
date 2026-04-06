@@ -4,8 +4,8 @@
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <AssemblyName>RoutingHelper</AssemblyName>
-    <RootNamespace>RoutingHelper</RootNamespace>
+    <AssemblyName>BetterMapTools</AssemblyName>
+    <RootNamespace>BetterMapTools</RootNamespace>
     <Sts2InstallDir Condition="'$(Sts2InstallDir)' == '' and '$(STS2_INSTALL_DIR)' != ''">$(STS2_INSTALL_DIR)</Sts2InstallDir>
   </PropertyGroup>
 
@@ -28,9 +28,18 @@
     </Reference>
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="resources/route_icon.png" LogicalName="BetterMapTools.RouteIconPng" />
+    <EmbeddedResource Include="resources/route_icon_glow.png" LogicalName="BetterMapTools.RouteIconGlowPng" />
+    <EmbeddedResource Include="resources/color_icon.png" LogicalName="BetterMapTools.ColorIconPng" />
+    <EmbeddedResource Include="resources/color_icon_glow.png" LogicalName="BetterMapTools.ColorIconGlowPng" />
+    <EmbeddedResource Include="resources/undo_icon.png" LogicalName="BetterMapTools.UndoIconPng" />
+    <EmbeddedResource Include="resources/undo_icon_glow.png" LogicalName="BetterMapTools.UndoIconGlowPng" />
+  </ItemGroup>
+
   <Target Name="ValidateSts2InstallDir" BeforeTargets="ResolveReferences">
     <Error Condition="'$(Sts2InstallDir)' == ''" Text="Sts2InstallDir is not set. Define STS2_INSTALL_DIR in .env or pass -p:Sts2InstallDir=/path/to/Slay the Spire 2." />
     <Error Condition="!Exists('$(Sts2InstallDir)/data_sts2_windows_x86_64/sts2.dll')" Text="Could not find sts2.dll under '$(Sts2InstallDir)/data_sts2_windows_x86_64'. Check STS2_INSTALL_DIR in .env." />
-    <Error Condition="!Exists('../ModManagerSettings/dist/ModManagerSettings/ModManagerSettings.dll')" Text="RoutingHelper depends on ModManagerSettings. Build/install ModManagerSettings first so '../ModManagerSettings/dist/ModManagerSettings/ModManagerSettings.dll' exists." />
+    <Error Condition="!Exists('../ModManagerSettings/dist/ModManagerSettings/ModManagerSettings.dll')" Text="BetterMapTools depends on ModManagerSettings. Build/install ModManagerSettings first so '../ModManagerSettings/dist/ModManagerSettings/ModManagerSettings.dll' exists." />
   </Target>
 </Project>

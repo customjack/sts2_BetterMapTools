@@ -1,11 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using RoutingHelper.Features.MapRouting;
-using RoutingHelper.Features.MapRouting.Metrics;
+using BetterMapTools.Features.MapRouting;
+using BetterMapTools.Features.MapRouting.Metrics;
 using Godot;
 
-namespace RoutingHelper.Features.Settings;
+namespace BetterMapTools.Features.Settings;
 
 internal static partial class RoutingSettings
 {
@@ -17,13 +17,15 @@ internal static partial class RoutingSettings
         public required string Name { get; init; }
         public required Dictionary<RouteMetricType, ConstraintDefaults> Constraints { get; init; }
         public required Dictionary<RouteMetricType, PriorityDefaults> Priorities { get; init; }
+        public required string HighlightColorRaw { get; set; }
     }
 
     public const string DefaultHighlightColor = "#FFF2A6FF";
     public const string DefaultPresetName = "Default";
+    public const bool DefaultUseSeparateResultsPanel = true;
 
-    public static string HighlightColorRaw { get; set; } = DefaultHighlightColor;
     public static string ActivePresetName { get; private set; } = DefaultPresetName;
+    public static bool UseSeparateResultsPanel { get; private set; } = DefaultUseSeparateResultsPanel;
 
     private static readonly Dictionary<RouteMetricType, ConstraintDefaults> ConstraintDefaultsByMetric = new();
     private static readonly Dictionary<RouteMetricType, PriorityDefaults> PriorityDefaultsByMetric = new();
@@ -48,7 +50,7 @@ internal static partial class RoutingSettings
 
         if (PresetsByKey.Count == 0)
         {
-            SavePreset(DefaultPresetName, ConstraintDefaultsByMetric, PriorityDefaultsByMetric);
+            SavePreset(DefaultPresetName, ConstraintDefaultsByMetric, PriorityDefaultsByMetric, DefaultHighlightColor);
             ActivePresetName = DefaultPresetName;
         }
     }
@@ -112,14 +114,72 @@ internal static partial class RoutingSettings
         return LoadPresetIntoDefaults(name);
     }
 
+    public static string GetActivePresetHighlightColorRaw()
+    {
+        EnsureDefaultsInitialized();
+        return GetPresetHighlightColorRaw(ActivePresetName);
+    }
+
+    public static string GetPresetHighlightColorRaw(string name)
+    {
+        EnsureDefaultsInitialized();
+        if (TryGetPreset(name, out var preset))
+        {
+            return NormalizeColorOrDefault(preset.HighlightColorRaw);
+        }
+
+        return DefaultHighlightColor;
+    }
+
+    public static bool SetActivePresetHighlightColorRaw(string colorRaw)
+    {
+        EnsureDefaultsInitialized();
+        return SetPresetHighlightColorRaw(ActivePresetName, colorRaw);
+    }
+
+    public static bool SetPresetHighlightColorRaw(string name, string colorRaw)
+    {
+        EnsureDefaultsInitialized();
+        if (!TryGetPreset(name, out var preset))
+        {
+            return false;
+        }
+
+        preset.HighlightColorRaw = NormalizeColorOrDefault(colorRaw);
+        return true;
+    }
+
+    public static bool TryResolveColor(string raw, out Color color)
+    {
+        if (TryParseColor(raw, out color))
+        {
+            return true;
+        }
+
+        color = new Color(1f, 0.95f, 0.65f, 1f);
+        return false;
+    }
+
     public static void ResetAllToDefaults()
     {
-        HighlightColorRaw = DefaultHighlightColor;
         ConstraintDefaultsByMetric.Clear();
         PriorityDefaultsByMetric.Clear();
         PresetsByKey.Clear();
         ActivePresetName = DefaultPresetName;
+        UseSeparateResultsPanel = DefaultUseSeparateResultsPanel;
         EnsureDefaultsInitialized();
+    }
+
+    public static void SetUseSeparateResultsPanel(bool value)
+    {
+        UseSeparateResultsPanel = value;
+    }
+
+    public static string? SavedDrawingColorRaw { get; private set; }
+
+    public static void SetSavedDrawingColorRaw(string? value)
+    {
+        SavedDrawingColorRaw = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     }
 
     public static bool TryGetPreset(string name, out RoutingPreset preset)
@@ -187,7 +247,9 @@ internal static partial class RoutingSettings
 
     public static Color ResolveHighlightColor()
     {
-        return TryParseColor(HighlightColorRaw, out var parsed) ? parsed : new Color(1f, 0.95f, 0.65f, 1f);
+        return TryResolveColor(GetActivePresetHighlightColorRaw(), out var parsed)
+            ? parsed
+            : new Color(1f, 0.95f, 0.65f, 1f);
     }
 
     private static string NormalizePresetName(string value)
@@ -198,5 +260,11 @@ internal static partial class RoutingSettings
     private static string PresetKey(string name)
     {
         return NormalizePresetName(name).ToLowerInvariant();
+    }
+
+    private static string NormalizeColorOrDefault(string? value)
+    {
+        var text = (value ?? string.Empty).Trim();
+        return string.IsNullOrWhiteSpace(text) ? DefaultHighlightColor : text;
     }
 }

@@ -1,7 +1,7 @@
 using MegaCrit.Sts2.Core.Map;
-using RoutingHelper.Features.MapRouting.Metrics;
+using BetterMapTools.Features.MapRouting.Metrics;
 
-namespace RoutingHelper.Features.MapRouting;
+namespace BetterMapTools.Features.MapRouting;
 
 internal enum RouteMetricType
 {
@@ -17,6 +17,12 @@ internal enum RouteObjectiveMode
     None,
     Min,
     Max
+}
+
+internal enum RoutingSelectionMode
+{
+    Lexicographic,
+    Weighted
 }
 
 internal sealed class RoutingConstraint
@@ -37,6 +43,7 @@ internal sealed class RoutingRequest
 {
     public IReadOnlyList<RoutingConstraint> Constraints { get; init; } = Array.Empty<RoutingConstraint>();
     public IReadOnlyList<RoutingPriorityRule> Priorities { get; init; } = Array.Empty<RoutingPriorityRule>();
+    public RoutingSelectionMode SelectionMode { get; init; } = RoutingSelectionMode.Lexicographic;
 }
 
 internal sealed class RouteSolveResult
@@ -62,6 +69,8 @@ internal sealed class RouteMetricSummary
 
 internal static class RouteSolver
 {
+    private const double ScoreEpsilon = 0.000001d;
+
     public static IReadOnlyList<RouteMetricType> MetricOrder => RouteMetricRegistry.MetricOrder;
 
     public static RouteSolveResult Solve(MapPoint start, MapPoint boss, RoutingRequest request)
@@ -134,6 +143,26 @@ internal static class RouteSolver
             }
         }
 
+        return request.SelectionMode == RoutingSelectionMode.Weighted
+            ? SolveWeighted(candidates, feasible, resolvedPriorities, metricRank)
+            : SolveLexicographic(candidates, feasible, resolvedPriorities, metricRank);
+    }
+
+    public static string SelectionModeLabel(RoutingSelectionMode selectionMode)
+    {
+        return selectionMode switch
+        {
+            RoutingSelectionMode.Weighted => "Weighted Score",
+            _ => "Lexicographic"
+        };
+    }
+
+    private static RouteSolveResult SolveLexicographic(
+        IReadOnlyList<RouteCandidate> candidates,
+        IReadOnlyList<RouteCandidate> feasible,
+        IReadOnlyList<RoutingPriorityRule> resolvedPriorities,
+        IReadOnlyDictionary<RouteMetricType, int> metricRank)
+    {
         var activePriorities = resolvedPriorities
             .Where(rule => rule.Mode != RouteObjectiveMode.None)
             .OrderByDescending(rule => rule.Priority)
@@ -178,6 +207,65 @@ internal static class RouteSolver
             TotalRoutes = candidates.Count,
             FeasibleRoutes = feasible.Count,
             MetricSummaries = BuildMetricSummaries(candidates, feasible, current)
+        };
+    }
+
+    private static RouteSolveResult SolveWeighted(
+        IReadOnlyList<RouteCandidate> candidates,
+        IReadOnlyList<RouteCandidate> feasible,
+        IReadOnlyList<RoutingPriorityRule> resolvedPriorities,
+        IReadOnlyDictionary<RouteMetricType, int> metricRank)
+    {
+        var activePriorities = resolvedPriorities
+            .Where(rule => rule.Priority != 0)
+            .OrderByDescending(rule => Math.Abs(rule.Priority))
+            .ThenBy(rule => metricRank[rule.Metric])
+            .ToList();
+
+        if (activePriorities.Count == 0)
+        {
+            var unscoredRoutes = feasible
+                .Select(candidate => (IReadOnlyList<MapPoint>)candidate.Path)
+                .ToList();
+
+            return new RouteSolveResult
+            {
+                Found = unscoredRoutes.Count > 0,
+                Routes = unscoredRoutes,
+                StatusMessage = $"Found {unscoredRoutes.Count} route(s) ({feasible.Count} feasible of {candidates.Count} total). No weights enabled.",
+                TotalRoutes = candidates.Count,
+                FeasibleRoutes = feasible.Count,
+                MetricSummaries = BuildMetricSummaries(candidates, feasible, feasible)
+            };
+        }
+
+        var scoredCandidates = feasible
+            .Select(candidate => new ScoredCandidate(candidate, ComputeWeightedScore(candidate, activePriorities)))
+            .ToList();
+        var bestScore = scoredCandidates.Max(candidate => candidate.Score);
+        var selected = scoredCandidates
+            .Where(candidate => Math.Abs(candidate.Score - bestScore) <= ScoreEpsilon)
+            .Select(candidate => candidate.Candidate)
+            .ToList();
+
+        var routes = selected
+            .Select(candidate => (IReadOnlyList<MapPoint>)candidate.Path)
+            .ToList();
+        var summaries = activePriorities
+            .Select(rule => $"{MetricLabel(rule.Metric)} x{rule.Priority}")
+            .ToList();
+        var summary =
+            $"Found {routes.Count} route(s) ({feasible.Count} feasible of {candidates.Count} total) " +
+            $"with best weighted score {bestScore:0.###} using {string.Join(", ", summaries)}.";
+
+        return new RouteSolveResult
+        {
+            Found = routes.Count > 0,
+            Routes = routes,
+            StatusMessage = summary,
+            TotalRoutes = candidates.Count,
+            FeasibleRoutes = feasible.Count,
+            MetricSummaries = BuildMetricSummaries(candidates, feasible, selected)
         };
     }
 
@@ -265,6 +353,21 @@ internal static class RouteSolver
 
         public List<MapPoint> Path { get; }
         public Dictionary<RouteMetricType, int> Metrics { get; }
+    }
+
+    private readonly record struct ScoredCandidate(RouteCandidate Candidate, double Score);
+
+    private static double ComputeWeightedScore(
+        RouteCandidate candidate,
+        IReadOnlyList<RoutingPriorityRule> priorities)
+    {
+        var score = 0d;
+        foreach (var priority in priorities)
+        {
+            score += candidate.Metrics[priority.Metric] * priority.Priority;
+        }
+
+        return score;
     }
 
     private static IReadOnlyList<RouteMetricSummary> BuildMetricSummaries(

@@ -1,15 +1,17 @@
 using HarmonyLib;
-using RoutingHelper.Features.MapRouting;
-using RoutingHelper.Features.MapRouting.Metrics;
-using RoutingHelper.Features.Settings;
+using BetterMapTools.Features.MapDrawing.Buttons;
+using BetterMapTools.Features.MapRouting.Metrics;
+using BetterMapTools.Features.MapRouting;
+using BetterMapTools.Features.MapRouting.Buttons;
+using BetterMapTools.Features.Settings;
 using MegaCrit.Sts2.Core.Logging;
 
-namespace RoutingHelper.Core;
+namespace BetterMapTools.Core;
 
 public static class ModBootstrap
 {
-    private const string HarmonyId = "routinghelper.harmony";
-    private const string BuildMarker = "2026-03-14-structure-routinghelper-a";
+    private const string HarmonyId = "bettermaptools.harmony";
+    private const string BuildMarker = "2026-04-05-release-a";
 
     private static bool _initialized;
 
@@ -17,21 +19,20 @@ public static class ModBootstrap
     {
         if (_initialized)
         {
-            Log.Info("[RoutingHelper] ModBootstrap.Initialize skipped (already initialized).");
             return;
         }
 
         _initialized = true;
-        Log.Info($"[RoutingHelper] Mod bootstrap starting. build={BuildMarker}");
+        Log.Info($"[BetterMapTools] Mod loaded. build={BuildMarker}");
 
         RouteMetricRegistry.RegisterDefaults();
-        Log.Info($"[RoutingHelper] Registered route metrics: {string.Join(", ", RouteMetricRegistry.MetricOrder.Select(RouteSolver.MetricLabel))}.");
 
+        UndoMapToolRegistration.Register();
+        ColorPickerMapToolRegistration.Register();
+        RouteSolverMapToolRegistration.Register();
         RoutingSettingsRegistration.Register();
-        Log.Info("[RoutingHelper] Registered ModManagerSettings provider.");
 
         var harmony = new Harmony(HarmonyId);
         harmony.PatchAll();
-        Log.Info($"[RoutingHelper] Harmony patches applied with id '{HarmonyId}'.");
     }
 }

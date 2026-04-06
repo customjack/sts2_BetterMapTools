@@ -1,6 +1,8 @@
+using MegaCrit.Sts2.Core.Helpers;
 using MegaCrit.Sts2.Core.Map;
+using MegaCrit.Sts2.Core.Rooms;
 
-namespace RoutingHelper.Features.MapRouting.Metrics;
+namespace BetterMapTools.Features.MapRouting.Metrics;
 
 internal sealed class RestSiteRouteMetric : RouteMetricDefinition
 {
@@ -8,6 +10,7 @@ internal sealed class RestSiteRouteMetric : RouteMetricDefinition
 
     public override RouteMetricType Type => RouteMetricType.RestSite;
     public override string Label => "rests";
+    public override string? IconPath => ImageHelper.GetRoomIconPath(MapPointType.RestSite, RoomType.RestSite, null);
     public override int DefaultPriority => 30;
 
     protected override bool CountsPoint(MapPointType pointType)

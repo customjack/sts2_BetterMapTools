@@ -1,4 +1,4 @@
-namespace RoutingHelper.Features.MapRouting.Metrics;
+namespace BetterMapTools.Features.MapRouting.Metrics;
 
 internal abstract class RouteMetricConstraint
 {

@@ -1,10 +1,11 @@
 using Godot;
-using RoutingHelper.Features.Settings;
+using BetterMapTools.Features.MapDrawing;
+using BetterMapTools.Features.Settings;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Map;
 using MegaCrit.Sts2.Core.Nodes.Screens.Map;
 
-namespace RoutingHelper.Features.MapRouting;
+namespace BetterMapTools.Features.MapRouting;
 
 internal sealed class RouteOverlayRenderer
 {
@@ -17,73 +18,59 @@ internal sealed class RouteOverlayRenderer
 
     public void Clear()
     {
-        _mapScreen.Drawings?.ClearDrawnLinesLocal();
-
-        foreach (var point in GetAllMapPoints())
+        var drawings = _mapScreen.Drawings;
+        if (drawings == null)
         {
-            point.Modulate = Colors.White;
+            return;
         }
+
+        ClearDrawingsSafely(drawings);
     }
 
     public void Render(IReadOnlyList<IReadOnlyList<MapPoint>> routes)
     {
-        Clear();
-
         var drawings = _mapScreen.Drawings;
         if (drawings == null)
         {
-            Log.Warn("[RoutingHelper] NMapScreen.Drawings is null; skipping route render.");
+            Log.Warn("[BetterMapTools] NMapScreen.Drawings is null; skipping route render.");
             return;
         }
 
-        var nodeTint = RoutingSettings.ResolveHighlightColor();
+        var lineTint = RoutingSettings.ResolveHighlightColor();
         var coordToNode = GetNodeByCoord();
-        var highlighted = new HashSet<MapCoord>();
         var uniqueEdges = new HashSet<RouteEdge>();
         var existingLines = GetAllDrawnLines(drawings).ToHashSet();
 
-        foreach (var route in routes)
+        using (MapDrawingOperationHistoryService.SuppressLocalStrokeRecording())
         {
-            for (var i = 0; i < route.Count; i++)
+            foreach (var route in routes)
             {
-                highlighted.Add(route[i].coord);
-
-                if (i + 1 >= route.Count)
+                for (var i = 0; i + 1 < route.Count; i++)
                 {
-                    continue;
+                    if (!coordToNode.TryGetValue(route[i].coord, out var fromNode) ||
+                        !coordToNode.TryGetValue(route[i + 1].coord, out var toNode))
+                    {
+                        continue;
+                    }
+
+                    var edge = new RouteEdge(route[i].coord, route[i + 1].coord);
+                    if (!uniqueEdges.Add(edge))
+                    {
+                        continue;
+                    }
+
+                    var fromPos = ToDrawingSpace(drawings, fromNode);
+                    var toPos = ToDrawingSpace(drawings, toNode);
+
+                    drawings.BeginLineLocal(fromPos, DrawingMode.Drawing);
+                    drawings.UpdateCurrentLinePositionLocal(toPos);
+                    drawings.StopLineLocal();
                 }
-
-                if (!coordToNode.TryGetValue(route[i].coord, out var fromNode) ||
-                    !coordToNode.TryGetValue(route[i + 1].coord, out var toNode))
-                {
-                    continue;
-                }
-
-                var edge = new RouteEdge(route[i].coord, route[i + 1].coord);
-                if (!uniqueEdges.Add(edge))
-                {
-                    continue;
-                }
-
-                var fromPos = ToDrawingSpace(drawings, fromNode);
-                var toPos = ToDrawingSpace(drawings, toNode);
-
-                drawings.BeginLineLocal(fromPos, DrawingMode.Drawing);
-                drawings.UpdateCurrentLinePositionLocal(toPos);
-                drawings.StopLineLocal();
             }
         }
 
-        foreach (var coord in highlighted)
-        {
-            if (coordToNode.TryGetValue(coord, out var node))
-            {
-                node.Modulate = nodeTint;
-            }
-        }
-
-        var recoloredCount = RecolorNewLines(drawings, nodeTint, existingLines);
-        Log.Info($"[RoutingHelper] Rendered route overlay for {routes.Count} best route(s), unique_edges={uniqueEdges.Count}, recolored_lines={recoloredCount}.");
+        var recoloredCount = RecolorNewLines(drawings, lineTint, existingLines);
+        MapDrawingOperationHistoryService.RecordLocalOperation(recoloredCount);
     }
 
     private Dictionary<MapCoord, NMapPoint> GetNodeByCoord()
@@ -172,10 +159,29 @@ internal sealed class RouteOverlayRenderer
             }
 
             line.DefaultColor = tint;
+            line.SetMeta(MapDrawingLineMetadata.RouteOverlayMetaKey, true);
             count++;
         }
 
         return count;
+    }
+
+    private static void ClearDrawingsSafely(NMapDrawings drawings)
+    {
+        var priorMode = drawings.GetLocalDrawingMode(useOverride: false);
+        var wasActivelyDrawing = drawings.IsLocalDrawing();
+
+        if (wasActivelyDrawing)
+        {
+            drawings.StopLineLocal();
+        }
+
+        drawings.ClearDrawnLinesLocal();
+
+        if (priorMode != DrawingMode.None)
+        {
+            drawings.SetDrawingModeLocal(priorMode);
+        }
     }
 
     private readonly record struct RouteEdge(MapCoord From, MapCoord To);

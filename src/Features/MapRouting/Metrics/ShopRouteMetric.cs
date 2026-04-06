@@ -1,6 +1,8 @@
+using MegaCrit.Sts2.Core.Helpers;
 using MegaCrit.Sts2.Core.Map;
+using MegaCrit.Sts2.Core.Rooms;
 
-namespace RoutingHelper.Features.MapRouting.Metrics;
+namespace BetterMapTools.Features.MapRouting.Metrics;
 
 internal sealed class ShopRouteMetric : RouteMetricDefinition
 {
@@ -8,6 +10,7 @@ internal sealed class ShopRouteMetric : RouteMetricDefinition
 
     public override RouteMetricType Type => RouteMetricType.Shop;
     public override string Label => "shops";
+    public override string? IconPath => ImageHelper.GetRoomIconPath(MapPointType.Shop, RoomType.Shop, null);
     public override int DefaultPriority => 20;
 
     protected override bool CountsPoint(MapPointType pointType)

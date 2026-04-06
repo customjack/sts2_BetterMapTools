@@ -1,15 +1,13 @@
-using RoutingHelper.Core;
-using MegaCrit.Sts2.Core.Logging;
+using BetterMapTools.Core;
 using MegaCrit.Sts2.Core.Modding;
 
-namespace RoutingHelper;
+namespace BetterMapTools;
 
 [ModInitializer(nameof(OnModLoaded))]
 public static class ModEntry
 {
     public static void OnModLoaded()
     {
-        Log.Info("[RoutingHelper] ModEntry.OnModLoaded invoked by STS2.");
         ModBootstrap.Initialize();
     }
 }

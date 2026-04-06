@@ -2,7 +2,7 @@ using System;
 using System.Globalization;
 using Godot;
 
-namespace RoutingHelper.Features.Settings;
+namespace BetterMapTools.Features.Settings;
 
 internal static partial class RoutingSettings
 {

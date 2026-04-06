@@ -1,8 +1,10 @@
+using MegaCrit.Sts2.Core.Helpers;
 using MegaCrit.Sts2.Core.Map;
+using MegaCrit.Sts2.Core.Rooms;
 using ModManagerSettings.Api;
-using RoutingHelper.Features.Settings;
+using BetterMapTools.Features.Settings;
 
-namespace RoutingHelper.Features.MapRouting.Metrics;
+namespace BetterMapTools.Features.MapRouting.Metrics;
 
 internal abstract class RouteMetricDefinition
 {
@@ -15,6 +17,10 @@ internal abstract class RouteMetricDefinition
 
     public abstract RouteMetricType Type { get; }
     public abstract string Label { get; }
+
+    /// <summary>Returns the game icon path for this metric type, or null if no icon applies.</summary>
+    public virtual string? IconPath => null;
+
     public virtual int DefaultMin => 0;
     public virtual int DefaultMax => 99;
     public virtual RouteObjectiveMode DefaultObjectiveMode => RouteObjectiveMode.None;

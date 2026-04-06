@@ -1,33 +1,60 @@
-# RoutingHelper
+# BetterMapTools
 
-`RoutingHelper` adds route-planning tools on the map screen and integrates with `ModManagerSettings` for persistent configuration.
+Map tools for Slay the Spire 2. Adds a **route solver**, **map drawing tools**, and a configurable preset system to the map screen.
+
+**Features:**
+- Route solver with customizable presets — optimize your path based on metrics like shops, elites, campfires, and rest sites
+- Map drawing tools: freehand pencil, color picker, and undo
+- Per-preset route highlight colors
+- Persistent settings via ModManagerSettings
+- Multiplayer compatible
 
 ## Dependencies
 
-- Requires `ModManagerSettings`.
-- Install and enable `ModManagerSettings`. Available at [sts2_ModManagerSettings](https://github.com/customjack/sts2_ModManagerSettings)
+- Requires [ModManagerSettings](https://github.com/customjack/sts2_ModManagerSettings)
 
-## Install (Manual)
+Install and enable ModManagerSettings before installing this mod.
 
-1. Close Slay the Spire 2.
-2. Extract the release zip for `RoutingHelper`.
-3. In Steam, right-click `Slay the Spire 2` -> `Properties` -> `Installed Files` -> `Browse`.
-4. In the game folder that opens, create a `mods` folder if it does not exist.
-5. Drag the extracted `RoutingHelper` folder into `mods`.
-6. Confirm these files exist in `mods/RoutingHelper`:
-   - `RoutingHelper.dll`
-   - `RoutingHelper.pck`
-7. Launch Slay the Spire 2. If prompted to enable mods, accept and relaunch.
-8. In-game, open `Settings` -> `General` -> `Mods` and make sure:
-   - `ModManagerSettings` is enabled
-   - `RoutingHelper` is enabled
+## Install
+
+1. Install [ModManagerSettings](https://github.com/customjack/sts2_ModManagerSettings) first.
+2. Download the latest release zip from the [Releases](../../releases) page.
+3. Close Slay the Spire 2.
+4. In Steam, right-click `Slay the Spire 2` -> `Properties` -> `Installed Files` -> `Browse`.
+5. Create a `mods` folder in the game directory if it does not exist.
+6. Extract the zip and drag the `BetterMapTools` folder into `mods`.
+7. Confirm these files are present in `mods/BetterMapTools`:
+   - `BetterMapTools.dll`
+   - `BetterMapTools.pck`
+   - `BetterMapTools.json`
+8. Launch Slay the Spire 2. If prompted to enable mods, accept and relaunch.
+9. In-game, go to `Settings` -> `General` -> `Mods` and enable both `ModManagerSettings` and `BetterMapTools`.
+
+## Usage
+
+On the map screen, toolbar buttons appear at the bottom:
+- **Route Solver** — click to open the solver popup, choose a preset, and solve for the best path
+- **Pencil** — draw freehand on the map
+- **Color Picker** — change your drawing color
+- **Undo** — undo the last drawing action
+
+To configure presets, go to `Settings` -> `General` -> `Mods` -> `BetterMapTools` -> `Settings`.
 
 ## Developer Notes
 
-- Build (WSL/Linux scripts):
-  - `./scripts/bash/build_and_stage.sh`
-  - `./scripts/bash/make_pck.sh`
-  - `./scripts/bash/install_to_game.sh`
-- Environment:
-  - Copy `.env.example` to `.env`
-  - Set `STS2_INSTALL_DIR` in `.env`
+**Requirements:** .NET SDK, Godot 4 export templates, WSL or Linux shell.
+
+**Setup:**
+1. Copy `.env.example` to `.env`.
+2. Set `STS2_INSTALL_DIR` to your game install path.
+
+**Build and install:**
+```bash
+./scripts/bash/build_and_stage.sh
+./scripts/bash/make_pck.sh
+./scripts/bash/install_to_game.sh
+```
+
+## License
+
+MIT — see [LICENSE](LICENSE).

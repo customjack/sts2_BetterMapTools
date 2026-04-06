@@ -1,6 +1,8 @@
+using MegaCrit.Sts2.Core.Helpers;
 using MegaCrit.Sts2.Core.Map;
+using MegaCrit.Sts2.Core.Rooms;
 
-namespace RoutingHelper.Features.MapRouting.Metrics;
+namespace BetterMapTools.Features.MapRouting.Metrics;
 
 internal sealed class EliteRouteMetric : RouteMetricDefinition
 {
@@ -8,6 +10,7 @@ internal sealed class EliteRouteMetric : RouteMetricDefinition
 
     public override RouteMetricType Type => RouteMetricType.Elite;
     public override string Label => "elites";
+    public override string? IconPath => ImageHelper.GetRoomIconPath(MapPointType.Elite, RoomType.Elite, null);
     public override int DefaultPriority => 50;
 
     protected override bool CountsPoint(MapPointType pointType)

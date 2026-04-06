@@ -2,97 +2,158 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
-using RoutingHelper.Features.MapRouting.Metrics;
-using RoutingHelper.Features.Settings;
+using MegaCrit.Sts2.Core.Nodes.Screens.Map;
+using BetterMapTools.Features.MapRouting.Metrics;
+using BetterMapTools.Features.Settings;
 
-namespace RoutingHelper.Features.MapRouting.Modals;
+namespace BetterMapTools.Features.MapRouting.Modals;
 
 internal static partial class RoutePopupController
 {
+    private const float PresetManagerWidth = 1080f;
+    private const float PresetManagerHeight = 640f;
+
     private static void OpenPresetManager(
-        Control backdrop,
-        Control solverPanel,
+        Control overlay,
+        NMapScreen mapScreen,
+        RoutingSelectionMode selectionMode,
         Label activePresetLabel,
+        Func<string> getRouteColorRaw,
+        Action<string> setRouteColorRaw,
         IReadOnlyDictionary<RouteMetricType, (SpinBox Min, SpinBox Max)> constraintControls,
         IReadOnlyDictionary<RouteMetricType, PriorityControls> priorityControls)
     {
-        var existing = backdrop.GetNodeOrNull<Control>(PresetManagerName);
-        if (existing != null)
+        overlay.GetNodeOrNull<Control>(PresetManagerName)?.QueueFree();
+        var hiddenControls = overlay.GetChildren()
+            .OfType<Control>()
+            .Where(control => control.Visible)
+            .ToList();
+        foreach (var control in hiddenControls)
         {
-            MapModalLayout.ApplyCenteredPanelLayout(existing);
-            solverPanel.Visible = false;
-            existing.Visible = true;
-            return;
+            control.Visible = false;
         }
 
-        var managerBackdrop = new PanelContainer
+        var managerWindow = new PanelContainer
         {
             Name = PresetManagerName,
-            CustomMinimumSize = new Vector2(MapModalLayout.PanelWidth, MapModalLayout.PanelHeight),
-            MouseFilter = Control.MouseFilterEnum.Stop
+            CustomMinimumSize = new Vector2(PresetManagerWidth, PresetManagerHeight),
+            Size = new Vector2(PresetManagerWidth, PresetManagerHeight),
+            MouseFilter = Control.MouseFilterEnum.Stop,
+            FocusMode = Control.FocusModeEnum.All
         };
-        MapModalLayout.ApplyCenteredPanelLayout(managerBackdrop);
+        managerWindow.AddThemeStyleboxOverride("panel", CreateWindowStyle());
+        overlay.AddChild(managerWindow);
 
-        var margin = new MarginContainer();
-        margin.SetAnchorsPreset(Control.LayoutPreset.FullRect);
-        margin.AddThemeConstantOverride("margin_left", 16);
-        margin.AddThemeConstantOverride("margin_right", 16);
-        margin.AddThemeConstantOverride("margin_top", 14);
-        margin.AddThemeConstantOverride("margin_bottom", 14);
-        managerBackdrop.AddChild(margin);
+        var outerMargin = new MarginContainer();
+        outerMargin.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+        outerMargin.AddThemeConstantOverride("margin_left", 14);
+        outerMargin.AddThemeConstantOverride("margin_top", 14);
+        outerMargin.AddThemeConstantOverride("margin_right", 14);
+        outerMargin.AddThemeConstantOverride("margin_bottom", 14);
+        managerWindow.AddChild(outerMargin);
 
         var root = new VBoxContainer
         {
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
             SizeFlagsVertical = Control.SizeFlags.ExpandFill
         };
-        root.AddThemeConstantOverride("separation", 8);
-        margin.AddChild(root);
+        root.AddThemeConstantOverride("separation", 12);
+        outerMargin.AddChild(root);
 
-        root.AddChild(new Label
+        // Title bar (matches solver style)
+        var titleBar = new PanelContainer
         {
-            Text = "Preset Manager",
-            Modulate = Colors.White
-        });
+            MouseFilter = Control.MouseFilterEnum.Stop,
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+            CustomMinimumSize = new Vector2(0f, 56f)
+        };
+        titleBar.AddThemeStyleboxOverride("panel", CreateHeaderStyle());
+        root.AddChild(titleBar);
+
+        var titleMargin = new MarginContainer
+        {
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+            SizeFlagsVertical = Control.SizeFlags.ShrinkBegin
+        };
+        titleMargin.AddThemeConstantOverride("margin_left", 14);
+        titleMargin.AddThemeConstantOverride("margin_top", 10);
+        titleMargin.AddThemeConstantOverride("margin_right", 14);
+        titleMargin.AddThemeConstantOverride("margin_bottom", 10);
+        titleBar.AddChild(titleMargin);
+
+        var titleRow = new HBoxContainer
+        {
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+            MouseFilter = Control.MouseFilterEnum.Ignore
+        };
+        titleRow.AddThemeConstantOverride("separation", 10);
+        titleMargin.AddChild(titleRow);
+
+        var titleStack = new VBoxContainer
+        {
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+            MouseFilter = Control.MouseFilterEnum.Ignore
+        };
+        titleStack.AddThemeConstantOverride("separation", 2);
+        titleRow.AddChild(titleStack);
+
+        titleStack.AddChild(CreateSectionLabel("BetterMapTools", 22, Colors.White));
+        titleStack.AddChild(CreateMutedLabel("Preset Manager", new Color(0.78f, 0.84f, 0.9f, 0.88f), 15));
+
+        var closeButton = new Button { Text = "Back", CustomMinimumSize = new Vector2(96f, 34f) };
+        titleRow.AddChild(closeButton);
+
+        var contentScroll = new ScrollContainer
+        {
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+            SizeFlagsVertical = Control.SizeFlags.ExpandFill,
+            FollowFocus = true
+        };
+        root.AddChild(contentScroll);
+
+        // Content section
+        var contentSection = AddSection(contentScroll, "Presets");
+        contentSection.SizeFlagsVertical = Control.SizeFlags.ShrinkBegin;
 
         var status = new Label
         {
             Text = "Select a preset to load, or enter a name to add/save current solver values.",
             AutowrapMode = TextServer.AutowrapMode.WordSmart,
-            Modulate = new Color(0.77f, 0.81f, 0.87f, 1f),
-            CustomMinimumSize = new Vector2(0f, 42f)
+            CustomMinimumSize = new Vector2(0f, 40f),
+            MouseFilter = Control.MouseFilterEnum.Ignore
         };
-        root.AddChild(status);
+        status.AddThemeFontSizeOverride("font_size", 14);
+        status.AddThemeColorOverride("font_color", new Color(0.77f, 0.81f, 0.87f, 1f));
+        contentSection.AddChild(status);
 
         var list = new ItemList
         {
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
             SizeFlagsVertical = Control.SizeFlags.ExpandFill,
+            CustomMinimumSize = new Vector2(0f, 180f),
             AllowRmbSelect = true,
             SelectMode = ItemList.SelectModeEnum.Single
         };
-        root.AddChild(list);
+        contentSection.AddChild(list);
 
         var newName = new LineEdit
         {
             PlaceholderText = "New preset name...",
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
         };
-        root.AddChild(newName);
+        contentSection.AddChild(newName);
 
         var buttons = new HBoxContainer();
         buttons.AddThemeConstantOverride("separation", 6);
-        root.AddChild(buttons);
+        contentSection.AddChild(buttons);
 
         var addSaveCurrent = new Button { Text = "Add/Save Current" };
         var delete = new Button { Text = "Delete Selected" };
         var load = new Button { Text = "Load Selected" };
-        var close = new Button { Text = "Back" };
         buttons.AddChild(addSaveCurrent);
         buttons.AddChild(delete);
         buttons.AddChild(load);
         buttons.AddChild(new Control { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill });
-        buttons.AddChild(close);
 
         void RefreshList(string preferred = "")
         {
@@ -119,18 +180,26 @@ internal static partial class RoutePopupController
             }
         }
 
+        void SetStatus(string text, bool success)
+        {
+            status.Text = text;
+            status.AddThemeColorOverride("font_color", success
+                ? new Color(0.55f, 0.95f, 0.55f, 1f)
+                : new Color(0.95f, 0.46f, 0.46f, 1f));
+        }
+
         addSaveCurrent.Pressed += () =>
         {
             var name = (newName.Text ?? string.Empty).Trim();
             if (string.IsNullOrWhiteSpace(name))
             {
-                status.Text = "Preset name is required.";
-                status.Modulate = new Color(0.95f, 0.46f, 0.46f, 1f);
+                SetStatus("Preset name is required.", false);
                 return;
             }
 
-            SavePresetFromControls(name, constraintControls, priorityControls, status);
-            activePresetLabel.Text = $"Active preset: {RoutingSettings.ActivePresetName}";
+            SavePresetFromControls(name, selectionMode, getRouteColorRaw, setRouteColorRaw, constraintControls, priorityControls, status);
+            activePresetLabel.Text = $"Preset: {RoutingSettings.ActivePresetName}";
+            setRouteColorRaw(RoutingSettings.GetActivePresetHighlightColorRaw());
             RefreshList(name);
             newName.Clear();
         };
@@ -146,15 +215,14 @@ internal static partial class RoutePopupController
             var name = list.GetItemText(selected[0]);
             if (!RoutingSettings.DeletePreset(name))
             {
-                status.Text = $"Cannot delete preset '{name}'.";
-                status.Modulate = new Color(0.95f, 0.46f, 0.46f, 1f);
+                SetStatus($"Cannot delete preset '{name}'.", false);
                 return;
             }
 
             RoutingSettingsRegistration.RefreshPresetSettings();
-            status.Text = $"Deleted preset '{name}'.";
-            status.Modulate = new Color(0.55f, 0.95f, 0.55f, 1f);
-            activePresetLabel.Text = $"Active preset: {RoutingSettings.ActivePresetName}";
+            SetStatus($"Deleted preset '{name}'.", true);
+            activePresetLabel.Text = $"Preset: {RoutingSettings.ActivePresetName}";
+            setRouteColorRaw(RoutingSettings.GetActivePresetHighlightColorRaw());
             RefreshList(RoutingSettings.ActivePresetName);
         };
 
@@ -167,53 +235,125 @@ internal static partial class RoutePopupController
             }
 
             var name = list.GetItemText(selected[0]);
-            if (LoadPresetIntoControls(name, constraintControls, priorityControls))
+            if (LoadPresetIntoControls(name, selectionMode, setRouteColorRaw, constraintControls, priorityControls))
             {
-                status.Text = $"Loaded preset '{name}'.";
-                status.Modulate = new Color(0.55f, 0.95f, 0.55f, 1f);
-                activePresetLabel.Text = $"Active preset: {RoutingSettings.ActivePresetName}";
+                SetStatus($"Loaded preset '{name}'.", true);
+                activePresetLabel.Text = $"Preset: {RoutingSettings.ActivePresetName}";
             }
             else
             {
-                status.Text = $"Could not load preset '{name}'.";
-                status.Modulate = new Color(0.95f, 0.46f, 0.46f, 1f);
+                SetStatus($"Could not load preset '{name}'.", false);
             }
         };
 
-        close.Pressed += () =>
+        void CloseManager()
         {
-            managerBackdrop.Visible = false;
-            solverPanel.Visible = true;
+            managerWindow.QueueFree();
+        }
+
+        managerWindow.TreeExiting += () =>
+        {
+            foreach (var control in hiddenControls)
+            {
+                if (GodotObject.IsInstanceValid(control))
+                {
+                    control.Visible = true;
+                }
+            }
         };
 
+        closeButton.Pressed += CloseManager;
+
         RefreshList(RoutingSettings.ActivePresetName);
-        backdrop.AddChild(managerBackdrop);
-        solverPanel.Visible = false;
+
+        AttachPresetManagerPlacement(mapScreen, managerWindow);
+        AttachDragBehavior(titleBar, mapScreen, managerWindow);
+    }
+
+    private static void AttachPresetManagerPlacement(NMapScreen mapScreen, Control managerWindow)
+    {
+        var hasCustomPosition = false;
+
+        void PlaceWindow()
+        {
+            if (!GodotObject.IsInstanceValid(mapScreen) || !GodotObject.IsInstanceValid(managerWindow))
+            {
+                return;
+            }
+
+            var viewportSize = mapScreen.Size;
+            if (viewportSize.X <= 0f || viewportSize.Y <= 0f)
+            {
+                viewportSize = mapScreen.GetWindow()?.ContentScaleSize ?? viewportSize;
+            }
+
+            var desired = hasCustomPosition
+                ? managerWindow.Position
+                : new Vector2(
+                    (viewportSize.X - managerWindow.Size.X) * 0.5f,
+                    (viewportSize.Y - managerWindow.Size.Y) * 0.5f);
+            managerWindow.Position = ClampWindowPosition(viewportSize, managerWindow.Size, desired);
+        }
+
+        managerWindow.Resized += PlaceWindow;
+        mapScreen.Resized += PlaceWindow;
+        Callable.From(PlaceWindow).CallDeferred();
+        PlaceWindow();
+
+        managerWindow.SetMeta("bettermaptools_has_custom_position", hasCustomPosition);
+        managerWindow.Connect(Control.SignalName.GuiInput, Callable.From<InputEvent>(_ =>
+        {
+            if (managerWindow.HasMeta("bettermaptools_has_custom_position"))
+            {
+                hasCustomPosition = managerWindow.GetMeta("bettermaptools_has_custom_position").AsBool();
+            }
+        }));
     }
 
     private static void SavePresetFromControls(
         string name,
+        RoutingSelectionMode selectionMode,
+        Func<string> getRouteColorRaw,
+        Action<string> setRouteColorRaw,
         IReadOnlyDictionary<RouteMetricType, (SpinBox Min, SpinBox Max)> constraintControls,
         IReadOnlyDictionary<RouteMetricType, PriorityControls> priorityControls,
         Label status)
     {
         var constraints = ReadConstraintState(constraintControls);
-        var priorities = ReadPriorityState(priorityControls);
-        if (!RoutingSettings.SavePreset(name, constraints, priorities))
+        var priorities = selectionMode == RoutingSelectionMode.Weighted
+            ? PriorityState.ToDictionary(pair => pair.Key, pair => pair.Value)
+            : ReadPriorityState(priorityControls);
+        var colorRaw = (getRouteColorRaw() ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(colorRaw))
+        {
+            colorRaw = RoutingSettings.DefaultHighlightColor;
+        }
+
+        if (!RoutingSettings.TryResolveColor(colorRaw, out _))
+        {
+            status.Text = $"Invalid color '{colorRaw}'.";
+            status.AddThemeColorOverride("font_color", new Color(0.95f, 0.46f, 0.46f, 1f));
+            return;
+        }
+
+        if (!RoutingSettings.SavePreset(name, constraints, priorities, colorRaw))
         {
             status.Text = $"Failed to save preset '{name}'.";
-            status.Modulate = new Color(0.95f, 0.46f, 0.46f, 1f);
+            status.AddThemeColorOverride("font_color", new Color(0.95f, 0.46f, 0.46f, 1f));
             return;
         }
 
         RoutingSettings.SetActivePreset(name);
         RoutingSettingsRegistration.RefreshPresetSettings();
+        setRouteColorRaw(RoutingSettings.GetActivePresetHighlightColorRaw());
         status.Text = $"Saved preset '{name}'.";
-        status.Modulate = new Color(0.55f, 0.95f, 0.55f, 1f);
+        status.AddThemeColorOverride("font_color", new Color(0.55f, 0.95f, 0.55f, 1f));
     }
 
     private static bool LoadPresetIntoControls(
         string name,
+        RoutingSelectionMode selectionMode,
+        Action<string> setRouteColorRaw,
         IReadOnlyDictionary<RouteMetricType, (SpinBox Min, SpinBox Max)> constraintControls,
         IReadOnlyDictionary<RouteMetricType, PriorityControls> priorityControls)
     {
@@ -228,18 +368,22 @@ internal static partial class RoutePopupController
             var priority = RoutingSettings.GetPriorityDefaults(metric);
 
             ConstraintState[metric.Type] = (constraint.Min, constraint.Max);
-            PriorityState[metric.Type] = (priority.Mode, priority.Priority);
+            SetPriorityState(metric.Type, priority.Mode, priority.Priority);
 
             var controls = constraintControls[metric.Type];
             controls.Min.Value = constraint.Min;
             controls.Max.Value = constraint.Max;
 
-            var priorityControl = priorityControls[metric.Type];
-            var selectedIndex = priorityControl.Options.ToList().FindIndex(option => option == priority.Mode);
-            priorityControl.Mode.Select(selectedIndex >= 0 ? selectedIndex : 0);
-            priorityControl.Priority.Value = priority.Priority;
+            if (selectionMode == RoutingSelectionMode.Lexicographic)
+            {
+                var priorityControl = priorityControls[metric.Type];
+                var selectedIndex = priorityControl.Options.ToList().FindIndex(option => option == priority.Mode);
+                priorityControl.Mode.Select(selectedIndex >= 0 ? selectedIndex : 0);
+                priorityControl.Priority.Value = priority.Priority;
+            }
         }
 
+        setRouteColorRaw(RoutingSettings.GetActivePresetHighlightColorRaw());
         return true;
     }
 

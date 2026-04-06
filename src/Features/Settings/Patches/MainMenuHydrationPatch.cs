@@ -3,7 +3,7 @@ using HarmonyLib;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Nodes.Screens.MainMenu;
 
-namespace RoutingHelper.Features.Settings;
+namespace BetterMapTools.Features.Settings;
 
 [HarmonyPatch(typeof(NMainMenu), nameof(NMainMenu._Ready))]
 internal static class NMainMenuReadyRoutingSettingsHydrationPatch
@@ -16,7 +16,7 @@ internal static class NMainMenuReadyRoutingSettingsHydrationPatch
         }
         catch (Exception ex)
         {
-            Log.Error($"[RoutingHelper] Failed late settings hydration on NMainMenu._Ready. {ex}");
+            Log.Error($"[BetterMapTools] Failed late settings hydration on NMainMenu._Ready. {ex}");
         }
     }
 }
