@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using BetterMapTools.Features.Common.Modals;
 using Godot;
 using BetterMapTools.Features.MapDrawing.Multiplayer;
@@ -10,11 +9,9 @@ namespace BetterMapTools.Features.MapDrawing.Modals;
 internal static class DrawingColorPopupController
 {
     private const string PopupName = "BetterMapToolsDrawingColorPopup";
-    private const int MaxRecentColors = 10;
     private const float WindowWidth = 1080f;
     private const float WindowHeight = 640f;
     private const float WindowMargin = 28f;
-    private static readonly List<string> RecentColorRaws = [];
 
     public static void Toggle(NMapScreen mapScreen)
     {
@@ -148,7 +145,7 @@ internal static class DrawingColorPopupController
             currentRaw = MapDrawingColorOverrideService.ToColorRaw(MapDrawingColorOverrideService.GetLocalDefaultColor());
         }
 
-        RememberRecentColor(currentRaw);
+        DrawingColorState.Remember(currentRaw);
         var colorRow = new HBoxContainer
         {
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
@@ -208,12 +205,44 @@ internal static class DrawingColorPopupController
             PlaceholderText = MapDrawingColorOverrideService.ToColorRaw(MapDrawingColorOverrideService.GetLocalDefaultColor()),
             AllowAlpha = false,
             ApplyButtonText = "Apply",
-            OnApply = value =>
-            {
-                currentRaw = value;
-                SyncPreview(currentRaw);
-            }
+            OnApply = value => ApplyColor(value, overlay)
         });
+
+        var characterSection = AddSection(contentColumn, "Character Color");
+        characterSection.SizeFlagsVertical = Control.SizeFlags.ShrinkBegin;
+        characterSection.AddChild(CreateMutedLabel(
+            "Use your character's default map drawing color.",
+            new Color(0.84f, 0.88f, 0.92f, 0.96f),
+            15));
+
+        var characterDefaultColor = MapDrawingColorOverrideService.GetLocalDefaultColor();
+        var characterDefaultRaw = MapDrawingColorOverrideService.ToColorRaw(characterDefaultColor);
+        var characterRow = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        characterRow.AddThemeConstantOverride("separation", 8);
+        characterSection.AddChild(characterRow);
+
+        var characterSwatch = new ColorRect
+        {
+            CustomMinimumSize = new Vector2(28f, 28f),
+            Color = characterDefaultColor,
+            MouseFilter = Control.MouseFilterEnum.Ignore
+        };
+        characterRow.AddChild(characterSwatch);
+
+        var characterButton = new Button
+        {
+            Text = characterDefaultRaw,
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
+        };
+        characterButton.Pressed += () =>
+        {
+            RoutingSettings.SetSavedDrawingColorRaw(null);
+            RoutingSettingsRegistration.PersistCurrentValuesIfReady();
+            MapDrawingColorOverrideService.ApplyLocalOverride(null);
+            MapDrawingSyncService.BroadcastLocalColor("Drawing color default button");
+            overlay.QueueFree();
+        };
+        characterRow.AddChild(characterButton);
 
         var recentsSection = AddSection(contentColumn, "Recent Colors");
         recentsSection.SizeFlagsVertical = Control.SizeFlags.ShrinkBegin;
@@ -237,7 +266,7 @@ internal static class DrawingColorPopupController
                 child.QueueFree();
             }
 
-            if (RecentColorRaws.Count == 0)
+            if (DrawingColorState.RecentColorRaws.Count == 0)
             {
                 recentColorsList.AddChild(CreateMutedLabel(
                     "Recent colors appear here after you apply them.",
@@ -246,7 +275,7 @@ internal static class DrawingColorPopupController
                 return;
             }
 
-            foreach (var raw in RecentColorRaws)
+            foreach (var raw in DrawingColorState.RecentColorRaws)
             {
                 var row = new HBoxContainer
                 {
@@ -278,82 +307,62 @@ internal static class DrawingColorPopupController
                     Text = raw,
                     SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
                 };
-                useButton.Pressed += () =>
-                {
-                    currentRaw = raw;
-                    SyncPreview(currentRaw);
-                };
+                useButton.Pressed += () => ApplyColor(raw, overlay);
                 row.AddChild(useButton);
             }
         }
 
         RefreshRecents();
 
-        var actionRow = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-        actionRow.AddThemeConstantOverride("separation", 8);
-        root.AddChild(actionRow);
+        // Quick Color Bar toggle section
+        var quickBarSection = AddSection(contentColumn, "Quick Color Bar");
+        quickBarSection.SizeFlagsVertical = Control.SizeFlags.ShrinkBegin;
+        quickBarSection.AddChild(CreateMutedLabel(
+            "Show a compact row of color swatches above the toolbar for one-click color switching.",
+            new Color(0.84f, 0.88f, 0.92f, 0.96f),
+            15));
 
-        var defaultButton = new Button
+        var pinRow = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        pinRow.AddThemeConstantOverride("separation", 10);
+        quickBarSection.AddChild(pinRow);
+
+        var pinButton = new Button
         {
-            Text = "Use Character Color",
-            CustomMinimumSize = new Vector2(178f, 34f)
+            Text = RoutingSettings.ColorQuickBarPinned ? "Pinned — Click to Unpin" : "Unpinned — Click to Pin",
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+            ToggleMode = true,
+            ButtonPressed = RoutingSettings.ColorQuickBarPinned
         };
-        var applyButton = new Button
+        pinButton.Toggled += pressed =>
         {
-            Text = "Apply",
-            CustomMinimumSize = new Vector2(108f, 34f)
+            RoutingSettingsRegistration.SetAndPersistColorQuickBarPinned(pressed);
+            pinButton.Text = pressed ? "Pinned — Click to Unpin" : "Unpinned — Click to Pin";
+            ColorQuickBarFeature.RefreshBar(mapScreen);
         };
-        actionRow.AddChild(defaultButton);
-        actionRow.AddChild(new Control { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill });
-        actionRow.AddChild(applyButton);
+        pinRow.AddChild(pinButton);
 
         closeButton.Pressed += overlay.QueueFree;
-        defaultButton.Pressed += () =>
-        {
-            RoutingSettings.SetSavedDrawingColorRaw(null);
-            RoutingSettingsRegistration.PersistCurrentValuesIfReady();
-            MapDrawingColorOverrideService.ApplyLocalOverride(null);
-            MapDrawingSyncService.BroadcastLocalColor("Drawing color default button");
-            overlay.QueueFree();
-        };
-        applyButton.Pressed += () =>
-        {
-            if (!RoutingSettings.TryResolveColor(currentRaw, out var selected))
-            {
-                SyncPreview(currentRaw);
-                return;
-            }
-
-            selected = MapDrawingColorOverrideService.NormalizeDrawingColor(selected);
-            currentRaw = MapDrawingColorOverrideService.ToColorRaw(selected);
-            RememberRecentColor(currentRaw);
-            RefreshRecents();
-            RoutingSettings.SetSavedDrawingColorRaw(currentRaw);
-            RoutingSettingsRegistration.PersistCurrentValuesIfReady();
-            MapDrawingColorOverrideService.ApplyLocalOverride(selected);
-            MapDrawingSyncService.BroadcastLocalColor("Drawing color apply");
-            overlay.QueueFree();
-        };
 
         AttachWindowPlacement(mapScreen, window);
         AttachDragBehavior(titleBar, mapScreen, window);
         return overlay;
     }
 
-    private static void RememberRecentColor(string? raw)
+    private static void ApplyColor(string raw, Control overlay)
     {
-        if (string.IsNullOrWhiteSpace(raw) || !RoutingSettings.TryResolveColor(raw, out var parsed))
+        if (!RoutingSettings.TryResolveColor(raw, out var selected))
         {
             return;
         }
 
-        var normalized = MapDrawingColorOverrideService.ToColorRaw(MapDrawingColorOverrideService.NormalizeDrawingColor(parsed));
-        RecentColorRaws.RemoveAll(existing => string.Equals(existing, normalized, System.StringComparison.OrdinalIgnoreCase));
-        RecentColorRaws.Insert(0, normalized);
-        if (RecentColorRaws.Count > MaxRecentColors)
-        {
-            RecentColorRaws.RemoveRange(MaxRecentColors, RecentColorRaws.Count - MaxRecentColors);
-        }
+        selected = MapDrawingColorOverrideService.NormalizeDrawingColor(selected);
+        var normalizedRaw = MapDrawingColorOverrideService.ToColorRaw(selected);
+        DrawingColorState.Remember(normalizedRaw);
+        RoutingSettings.SetSavedDrawingColorRaw(normalizedRaw);
+        RoutingSettingsRegistration.PersistCurrentValuesIfReady();
+        MapDrawingColorOverrideService.ApplyLocalOverride(selected);
+        MapDrawingSyncService.BroadcastLocalColor("Drawing color apply");
+        overlay.QueueFree();
     }
 
     private static VBoxContainer AddSection(Control parent, string title)

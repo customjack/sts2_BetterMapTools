@@ -36,7 +36,7 @@ internal sealed class RouteOverlayRenderer
             return;
         }
 
-        var lineTint = RoutingSettings.ResolveHighlightColor();
+        var lineTint = MapDrawingColorOverrideService.GetLocalEffectiveColor();
         var coordToNode = GetNodeByCoord();
         var uniqueEdges = new HashSet<RouteEdge>();
         var existingLines = GetAllDrawnLines(drawings).ToHashSet();

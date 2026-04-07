@@ -50,17 +50,19 @@ internal static class NMapDrawingsCreateLineForPlayerColorPatch
     [HarmonyPostfix]
     public static void Postfix(Player player, bool isErasing, Line2D __result)
     {
-        if (isErasing || __result == null)
+        if (isErasing)
         {
+            // The eraser material uses subtract blending. DefaultColor controls how much is
+            // subtracted per channel — white subtracts fully and erases in one pass regardless
+            // of what color the lines were drawn in. The native code sets DefaultColor to the
+            // character's map color, which only subtracts partially for non-white colors.
+            __result.DefaultColor = Colors.White;
             return;
         }
 
         if (MapDrawingColorOverrideService.TryGetOverride(player.NetId, out var overrideColor))
         {
             __result.DefaultColor = overrideColor;
-            // Native erasing appears to leave anti-aliased edge pixels behind on highly
-            // saturated custom colors. Use hard edges for overridden colors so the eraser
-            // clears the stroke in one pass.
             __result.Antialiased = false;
         }
     }

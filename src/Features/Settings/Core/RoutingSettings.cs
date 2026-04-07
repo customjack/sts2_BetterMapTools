@@ -17,7 +17,6 @@ internal static partial class RoutingSettings
         public required string Name { get; init; }
         public required Dictionary<RouteMetricType, ConstraintDefaults> Constraints { get; init; }
         public required Dictionary<RouteMetricType, PriorityDefaults> Priorities { get; init; }
-        public required string HighlightColorRaw { get; set; }
     }
 
     public const string DefaultHighlightColor = "#FFF2A6FF";
@@ -50,7 +49,7 @@ internal static partial class RoutingSettings
 
         if (PresetsByKey.Count == 0)
         {
-            SavePreset(DefaultPresetName, ConstraintDefaultsByMetric, PriorityDefaultsByMetric, DefaultHighlightColor);
+            SavePreset(DefaultPresetName, ConstraintDefaultsByMetric, PriorityDefaultsByMetric);
             ActivePresetName = DefaultPresetName;
         }
     }
@@ -114,40 +113,6 @@ internal static partial class RoutingSettings
         return LoadPresetIntoDefaults(name);
     }
 
-    public static string GetActivePresetHighlightColorRaw()
-    {
-        EnsureDefaultsInitialized();
-        return GetPresetHighlightColorRaw(ActivePresetName);
-    }
-
-    public static string GetPresetHighlightColorRaw(string name)
-    {
-        EnsureDefaultsInitialized();
-        if (TryGetPreset(name, out var preset))
-        {
-            return NormalizeColorOrDefault(preset.HighlightColorRaw);
-        }
-
-        return DefaultHighlightColor;
-    }
-
-    public static bool SetActivePresetHighlightColorRaw(string colorRaw)
-    {
-        EnsureDefaultsInitialized();
-        return SetPresetHighlightColorRaw(ActivePresetName, colorRaw);
-    }
-
-    public static bool SetPresetHighlightColorRaw(string name, string colorRaw)
-    {
-        EnsureDefaultsInitialized();
-        if (!TryGetPreset(name, out var preset))
-        {
-            return false;
-        }
-
-        preset.HighlightColorRaw = NormalizeColorOrDefault(colorRaw);
-        return true;
-    }
 
     public static bool TryResolveColor(string raw, out Color color)
     {
@@ -180,6 +145,13 @@ internal static partial class RoutingSettings
     public static void SetSavedDrawingColorRaw(string? value)
     {
         SavedDrawingColorRaw = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    public static bool ColorQuickBarPinned { get; private set; }
+
+    public static void SetColorQuickBarPinned(bool value)
+    {
+        ColorQuickBarPinned = value;
     }
 
     public static bool TryGetPreset(string name, out RoutingPreset preset)
@@ -245,12 +217,6 @@ internal static partial class RoutingSettings
         };
     }
 
-    public static Color ResolveHighlightColor()
-    {
-        return TryResolveColor(GetActivePresetHighlightColorRaw(), out var parsed)
-            ? parsed
-            : new Color(1f, 0.95f, 0.65f, 1f);
-    }
 
     private static string NormalizePresetName(string value)
     {

@@ -13,7 +13,6 @@ internal static partial class RoutingSettings
     private sealed class PresetPayload
     {
         public string Name { get; set; } = string.Empty;
-        public string Color { get; set; } = DefaultHighlightColor;
         public Dictionary<string, PresetMetricPayload> Metrics { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     }
 
@@ -25,17 +24,16 @@ internal static partial class RoutingSettings
         public int Priority { get; set; }
     }
 
-    public static bool SavePreset(
+    public static void SavePreset(
         string name,
         IReadOnlyDictionary<RouteMetricType, (int Min, int Max)> constraints,
-        IReadOnlyDictionary<RouteMetricType, (RouteObjectiveMode Mode, int Priority)> priorities,
-        string? highlightColorRaw = null)
+        IReadOnlyDictionary<RouteMetricType, (RouteObjectiveMode Mode, int Priority)> priorities)
     {
         EnsureDefaultsInitialized();
         var normalizedName = NormalizePresetName(name);
         if (string.IsNullOrWhiteSpace(normalizedName))
         {
-            return false;
+            return;
         }
 
         var constraintCopy = new Dictionary<RouteMetricType, ConstraintDefaults>();
@@ -61,23 +59,19 @@ internal static partial class RoutingSettings
         {
             Name = normalizedName,
             Constraints = constraintCopy,
-            Priorities = priorityCopy,
-            HighlightColorRaw = ResolveStoredColor(normalizedName, highlightColorRaw)
+            Priorities = priorityCopy
         };
-
-        return true;
     }
 
-    public static bool SavePreset(
+    public static void SavePreset(
         string name,
         IReadOnlyDictionary<RouteMetricType, ConstraintDefaults> constraints,
-        IReadOnlyDictionary<RouteMetricType, PriorityDefaults> priorities,
-        string? highlightColorRaw = null)
+        IReadOnlyDictionary<RouteMetricType, PriorityDefaults> priorities)
     {
         var normalizedName = NormalizePresetName(name);
         if (string.IsNullOrWhiteSpace(normalizedName))
         {
-            return false;
+            return;
         }
 
         var copiedConstraints = constraints.ToDictionary(
@@ -91,10 +85,8 @@ internal static partial class RoutingSettings
         {
             Name = normalizedName,
             Constraints = copiedConstraints,
-            Priorities = copiedPriorities,
-            HighlightColorRaw = ResolveStoredColor(normalizedName, highlightColorRaw)
+            Priorities = copiedPriorities
         };
-        return true;
     }
 
     public static string SerializePresetToJson(string name)
@@ -108,7 +100,6 @@ internal static partial class RoutingSettings
         var payload = new PresetPayload
         {
             Name = preset.Name,
-            Color = preset.HighlightColorRaw,
             Metrics = new Dictionary<string, PresetMetricPayload>(StringComparer.OrdinalIgnoreCase)
         };
 
@@ -179,7 +170,8 @@ internal static partial class RoutingSettings
                 Math.Max(0, metricPayload.Priority));
         }
 
-        return SavePreset(normalizedName, constraints, priorities, payload.Color);
+        SavePreset(normalizedName, constraints, priorities);
+        return true;
     }
 
     public static string PathSafePresetName(string name)
@@ -197,18 +189,4 @@ internal static partial class RoutingSettings
         return string.IsNullOrWhiteSpace(cleaned) ? "Unnamed" : cleaned;
     }
 
-    private static string ResolveStoredColor(string normalizedName, string? explicitColorRaw)
-    {
-        if (!string.IsNullOrWhiteSpace(explicitColorRaw))
-        {
-            return explicitColorRaw.Trim();
-        }
-
-        if (PresetsByKey.TryGetValue(PresetKey(normalizedName), out var existing))
-        {
-            return existing.HighlightColorRaw;
-        }
-
-        return DefaultHighlightColor;
-    }
 }

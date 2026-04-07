@@ -10,9 +10,9 @@ internal static class RoutingSettingsRegistration
     private const string LegacyModKey = "RoutingHelper";
     private const string UseSeparateResultsPanelKey = "use_separate_results_panel";
     private const string DrawingColorKey = "drawing_color";
+    private const string ColorQuickBarPinnedKey = "color_quick_bar_pinned";
     private const string ActivePresetKey = "preset_active_name";
     private const string PresetJsonKeyPrefix = "preset_json_";
-    private const string PresetColorKeyPrefix = "preset_color_";
     private static bool _hydratedFromPersistedValues;
 
     public static void Register()
@@ -25,7 +25,7 @@ internal static class RoutingSettingsRegistration
             ModPckName = ModKey,
             DisplayName = "BetterMapTools",
             Description = "Map tools host with route solver presets and route overlay drawing.",
-            ExplorerDescription = "Route solver presets are editable under Settings/Preset/Presets/*, including per-preset route colors.",
+            ExplorerDescription = "Route solver presets are editable under Settings/Preset/Presets/*. Drawing color applies to both the pencil tool and route overlay.",
             ShowSettingsButtonInModdingMenu = true,
             OnApply = null,
             OnRestoreDefaults = () =>
@@ -47,6 +47,20 @@ internal static class RoutingSettingsRegistration
                     OnApply = value =>
                     {
                         RoutingSettings.SetUseSeparateResultsPanel(value);
+                    }
+                },
+                new ModSettingToggleDefinition
+                {
+                    Key = ColorQuickBarPinnedKey,
+                    Label = "Pin Color Quick Bar",
+                    Description = "If enabled, a row of color swatches is shown below the map toolbar for quick color switching.",
+                    Path = "Settings/Drawing",
+                    AllowMultiplayerOverwrite = false,
+                    DefaultValue = false,
+                    GetCurrentValue = () => RoutingSettings.ColorQuickBarPinned,
+                    OnApply = value =>
+                    {
+                        RoutingSettings.SetColorQuickBarPinned(value);
                     }
                 }
             },
@@ -98,8 +112,7 @@ internal static class RoutingSettingsRegistration
         foreach (var definition in ModSettingsRegistry.GetAllSettings(ModKey))
         {
             if (definition.Key.Equals(ActivePresetKey, StringComparison.OrdinalIgnoreCase) ||
-                definition.Key.StartsWith(PresetJsonKeyPrefix, StringComparison.OrdinalIgnoreCase) ||
-                definition.Key.StartsWith(PresetColorKeyPrefix, StringComparison.OrdinalIgnoreCase))
+                definition.Key.StartsWith(PresetJsonKeyPrefix, StringComparison.OrdinalIgnoreCase))
             {
                 ModSettingsRegistry.RemoveSetting(ModKey, definition.Key);
             }
@@ -129,23 +142,6 @@ internal static class RoutingSettingsRegistration
             var pathName = RoutingSettings.PathSafePresetName(name);
             var pathKey = pathName.ToLowerInvariant();
 
-            ModSettingsRegistry.UpsertSetting(ModKey, new ModSettingColorDefinition
-            {
-                Key = PresetColorKeyPrefix + pathKey,
-                Label = $"Route Color ({name})",
-                Description = "Color used for this preset's route lines. Format: #RRGGBB, #RRGGBBAA, or r,g,b,a.",
-                Path = $"Settings/Preset/Presets/{pathName}",
-                AllowMultiplayerOverwrite = false,
-                PlaceholderText = RoutingSettings.DefaultHighlightColor,
-                DefaultValue = RoutingSettings.DefaultHighlightColor,
-                GetCurrentValue = () => RoutingSettings.GetPresetHighlightColorRaw(name),
-                OnApply = value =>
-                {
-                    if (RoutingSettings.SetPresetHighlightColorRaw(name, value))
-                    {
-                    }
-                }
-            });
 
             ModSettingsRegistry.UpsertSetting(ModKey, new ModSettingTextDefinition
             {
@@ -187,6 +183,12 @@ internal static class RoutingSettingsRegistration
         ModSettingsRegistry.PersistCurrentRegistrationValues(ModKey);
     }
 
+    public static void SetAndPersistColorQuickBarPinned(bool pinned)
+    {
+        RoutingSettings.SetColorQuickBarPinned(pinned);
+        PersistCurrentValuesIfReady();
+    }
+
     private static bool TryHydrateFromPersistedValues()
     {
         if (_hydratedFromPersistedValues)
@@ -222,17 +224,6 @@ internal static class RoutingSettingsRegistration
             RoutingSettings.ApplyPresetJson(resolvedName, pair.Value);
         }
 
-        foreach (var pair in persisted)
-        {
-            if (!pair.Key.StartsWith(PresetColorKeyPrefix, StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            var keySuffix = pair.Key[PresetColorKeyPrefix.Length..];
-            var resolvedName = ResolvePresetNameFromPersistedKeySuffix(keySuffix);
-            RoutingSettings.SetPresetHighlightColorRaw(resolvedName, pair.Value);
-        }
 
         if (persisted.TryGetValue(ActivePresetKey, out var activePreset) && !string.IsNullOrWhiteSpace(activePreset))
         {
@@ -248,6 +239,12 @@ internal static class RoutingSettingsRegistration
         if (persisted.TryGetValue(DrawingColorKey, out var drawingColorRaw))
         {
             RoutingSettings.SetSavedDrawingColorRaw(drawingColorRaw);
+        }
+
+        if (persisted.TryGetValue(ColorQuickBarPinnedKey, out var quickBarPinnedRaw) &&
+            bool.TryParse(quickBarPinnedRaw, out var quickBarPinned))
+        {
+            RoutingSettings.SetColorQuickBarPinned(quickBarPinned);
         }
 
         _hydratedFromPersistedValues = true;

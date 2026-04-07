@@ -26,10 +26,12 @@ internal static class SharedColorPickerModal
         public required Action<string> OnApply { get; init; }
     }
 
-    public static void Open(Control modalHost, Control placementRoot, Request request)
+    public static void Open(Control modalHost, Control placementRoot, Request request, bool hideHostChildren = true)
     {
         modalHost.GetNodeOrNull<Control>(PopupName)?.QueueFree();
-        var hiddenControls = HideVisibleChildren(modalHost);
+        var hiddenControls = hideHostChildren
+            ? HideVisibleChildren(modalHost)
+            : System.Array.Empty<Control>();
         modalHost.AddChild(BuildPopup(placementRoot, request, hiddenControls));
     }
 

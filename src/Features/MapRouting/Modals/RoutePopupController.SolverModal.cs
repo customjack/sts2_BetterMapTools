@@ -144,56 +144,6 @@ internal static partial class RoutePopupController
 
         var currentSelectionMode = SelectionModeState;
 
-        var appearanceContent = AddSection(configColumn, "Appearance");
-        var colorRow = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-        colorRow.AddThemeConstantOverride("separation", 8);
-        appearanceContent.AddChild(colorRow);
-        colorRow.AddChild(CreateMutedLabel("Route color", new Color(0.9f, 0.92f, 0.96f, 0.92f), 15, minWidth: 128f));
-
-        var routeColorValue = CreateMutedLabel(string.Empty, new Color(0.85f, 0.9f, 0.96f, 0.94f), 15);
-        routeColorValue.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        colorRow.AddChild(routeColorValue);
-
-        var routeColorPreview = new ColorRect
-        {
-            CustomMinimumSize = new Vector2(28f, 28f),
-            MouseFilter = Control.MouseFilterEnum.Ignore
-        };
-        colorRow.AddChild(routeColorPreview);
-
-        var routeColorButton = new Button
-        {
-            Text = "Pick Color",
-            CustomMinimumSize = new Vector2(118f, 34f)
-        };
-        colorRow.AddChild(routeColorButton);
-
-        var currentRouteColorRaw = RoutingSettings.GetActivePresetHighlightColorRaw();
-        void SetRouteColorRaw(string value)
-        {
-            currentRouteColorRaw = string.IsNullOrWhiteSpace(value)
-                ? RoutingSettings.DefaultHighlightColor
-                : value.Trim();
-            UpdateRouteColorDisplay(routeColorValue, routeColorPreview, currentRouteColorRaw);
-        }
-
-        string GetRouteColorRaw()
-        {
-            return currentRouteColorRaw;
-        }
-
-        SetRouteColorRaw(currentRouteColorRaw);
-        routeColorButton.Pressed += () => SharedColorPickerModal.Open(overlay, mapScreen, new SharedColorPickerModal.Request
-        {
-            Title = "BetterMapTools",
-            Subtitle = "Route Color",
-            Description = "Choose the highlight color used when the solver draws the selected route set.",
-            InitialColorRaw = GetRouteColorRaw(),
-            PlaceholderText = RoutingSettings.DefaultHighlightColor,
-            AllowAlpha = true,
-            ApplyButtonText = "Apply",
-            OnApply = SetRouteColorRaw
-        });
 
         var selectionModeContent = AddSection(configColumn, "Selection Mode");
         var selectionModeDescription = CreateMutedLabel(string.Empty, new Color(0.82f, 0.86f, 0.92f, 0.94f), 15);
@@ -416,15 +366,13 @@ internal static partial class RoutePopupController
             currentSelectionMode,
             constraintControls,
             priorityControls,
-            GetRouteColorRaw,
-            SetRouteColorRaw,
             summary,
             tableGrid);
         closeButton.Pressed += () => overlay.Visible = false;
         managerButton.Pressed += () =>
         {
             PersistCurrentPriorityInputs();
-            OpenPresetManager(overlay, mapScreen, currentSelectionMode, activePresetLabel, GetRouteColorRaw, SetRouteColorRaw, constraintControls, priorityControls);
+            OpenPresetManager(overlay, mapScreen, currentSelectionMode, activePresetLabel, constraintControls, priorityControls);
         };
 
         AttachWindowPlacement(mapScreen, solverWindow);
@@ -533,13 +481,6 @@ internal static partial class RoutePopupController
         button.AddThemeColorOverride("font_color", selected ? Colors.White : new Color(0.82f, 0.88f, 0.94f, 0.92f));
     }
 
-    private static void UpdateRouteColorDisplay(Label valueLabel, ColorRect swatch, string raw)
-    {
-        valueLabel.Text = string.IsNullOrWhiteSpace(raw)
-            ? RoutingSettings.DefaultHighlightColor
-            : raw.Trim();
-        UpdateRouteColorPreview(swatch, valueLabel.Text);
-    }
 
     private static Control CreateMetricLabelWithIcon(RouteMetricDefinition metric, float minWidth = 0f)
     {
@@ -750,8 +691,6 @@ internal static partial class RoutePopupController
         RoutingSelectionMode selectionMode,
         IReadOnlyDictionary<RouteMetricType, (SpinBox Min, SpinBox Max)> constraintControls,
         IReadOnlyDictionary<RouteMetricType, PriorityControls> priorityControls,
-        Func<string> getRouteColorRaw,
-        Action<string> setRouteColorRaw,
         Label summary,
         GridContainer tableGrid)
     {
@@ -806,21 +745,6 @@ internal static partial class RoutePopupController
                 }
             }
 
-            var colorRaw = (getRouteColorRaw() ?? string.Empty).Trim();
-            if (string.IsNullOrWhiteSpace(colorRaw))
-            {
-                colorRaw = RoutingSettings.DefaultHighlightColor;
-            }
-
-            if (!RoutingSettings.TryResolveColor(colorRaw, out _))
-            {
-                summary.Text = $"Invalid route color '{colorRaw}'. Use #RRGGBB, #RRGGBBAA, or r,g,b,a.";
-                summary.Modulate = new Color(0.95f, 0.46f, 0.46f, 1f);
-                return;
-            }
-
-            RoutingSettings.SetActivePresetHighlightColorRaw(colorRaw);
-            setRouteColorRaw(RoutingSettings.GetActivePresetHighlightColorRaw());
             RoutingSettingsRegistration.PersistCurrentValuesIfReady();
 
             var runState = RunManager.Instance.DebugOnlyGetState();
@@ -863,18 +787,6 @@ internal static partial class RoutePopupController
         }
     }
 
-    private static void UpdateRouteColorPreview(ColorRect swatch, string raw)
-    {
-        if (RoutingSettings.TryResolveColor(raw ?? string.Empty, out var color))
-        {
-            swatch.Color = color;
-            swatch.Modulate = Colors.White;
-            return;
-        }
-
-        swatch.Color = new Color(0.2f, 0.2f, 0.2f, 1f);
-        swatch.Modulate = new Color(0.9f, 0.35f, 0.35f, 1f);
-    }
 
     private static void PopulateMetricTable(GridContainer tableGrid, IReadOnlyList<RouteMetricSummary> summaries)
     {

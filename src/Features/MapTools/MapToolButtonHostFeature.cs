@@ -357,6 +357,15 @@ internal static class NMapScreenReadyBetterMapToolsPatch
         {
             Log.Error($"[BetterMapTools] Failed to apply saved drawing color on map load. {ex}");
         }
+
+        try
+        {
+            ColorQuickBarFeature.AttachToMapScreen(__instance);
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"[BetterMapTools] Failed to attach color quick bar. {ex}");
+        }
     }
 
     private static void ApplySavedDrawingColor()

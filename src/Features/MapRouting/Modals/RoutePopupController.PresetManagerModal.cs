@@ -18,8 +18,6 @@ internal static partial class RoutePopupController
         NMapScreen mapScreen,
         RoutingSelectionMode selectionMode,
         Label activePresetLabel,
-        Func<string> getRouteColorRaw,
-        Action<string> setRouteColorRaw,
         IReadOnlyDictionary<RouteMetricType, (SpinBox Min, SpinBox Max)> constraintControls,
         IReadOnlyDictionary<RouteMetricType, PriorityControls> priorityControls)
     {
@@ -197,9 +195,8 @@ internal static partial class RoutePopupController
                 return;
             }
 
-            SavePresetFromControls(name, selectionMode, getRouteColorRaw, setRouteColorRaw, constraintControls, priorityControls, status);
+            SavePresetFromControls(name, selectionMode, constraintControls, priorityControls, status);
             activePresetLabel.Text = $"Preset: {RoutingSettings.ActivePresetName}";
-            setRouteColorRaw(RoutingSettings.GetActivePresetHighlightColorRaw());
             RefreshList(name);
             newName.Clear();
         };
@@ -222,7 +219,6 @@ internal static partial class RoutePopupController
             RoutingSettingsRegistration.RefreshPresetSettings();
             SetStatus($"Deleted preset '{name}'.", true);
             activePresetLabel.Text = $"Preset: {RoutingSettings.ActivePresetName}";
-            setRouteColorRaw(RoutingSettings.GetActivePresetHighlightColorRaw());
             RefreshList(RoutingSettings.ActivePresetName);
         };
 
@@ -235,7 +231,7 @@ internal static partial class RoutePopupController
             }
 
             var name = list.GetItemText(selected[0]);
-            if (LoadPresetIntoControls(name, selectionMode, setRouteColorRaw, constraintControls, priorityControls))
+            if (LoadPresetIntoControls(name, selectionMode, constraintControls, priorityControls))
             {
                 SetStatus($"Loaded preset '{name}'.", true);
                 activePresetLabel.Text = $"Preset: {RoutingSettings.ActivePresetName}";
@@ -313,8 +309,6 @@ internal static partial class RoutePopupController
     private static void SavePresetFromControls(
         string name,
         RoutingSelectionMode selectionMode,
-        Func<string> getRouteColorRaw,
-        Action<string> setRouteColorRaw,
         IReadOnlyDictionary<RouteMetricType, (SpinBox Min, SpinBox Max)> constraintControls,
         IReadOnlyDictionary<RouteMetricType, PriorityControls> priorityControls,
         Label status)
@@ -323,29 +317,10 @@ internal static partial class RoutePopupController
         var priorities = selectionMode == RoutingSelectionMode.Weighted
             ? PriorityState.ToDictionary(pair => pair.Key, pair => pair.Value)
             : ReadPriorityState(priorityControls);
-        var colorRaw = (getRouteColorRaw() ?? string.Empty).Trim();
-        if (string.IsNullOrWhiteSpace(colorRaw))
-        {
-            colorRaw = RoutingSettings.DefaultHighlightColor;
-        }
-
-        if (!RoutingSettings.TryResolveColor(colorRaw, out _))
-        {
-            status.Text = $"Invalid color '{colorRaw}'.";
-            status.AddThemeColorOverride("font_color", new Color(0.95f, 0.46f, 0.46f, 1f));
-            return;
-        }
-
-        if (!RoutingSettings.SavePreset(name, constraints, priorities, colorRaw))
-        {
-            status.Text = $"Failed to save preset '{name}'.";
-            status.AddThemeColorOverride("font_color", new Color(0.95f, 0.46f, 0.46f, 1f));
-            return;
-        }
+        RoutingSettings.SavePreset(name, constraints, priorities);
 
         RoutingSettings.SetActivePreset(name);
         RoutingSettingsRegistration.RefreshPresetSettings();
-        setRouteColorRaw(RoutingSettings.GetActivePresetHighlightColorRaw());
         status.Text = $"Saved preset '{name}'.";
         status.AddThemeColorOverride("font_color", new Color(0.55f, 0.95f, 0.55f, 1f));
     }
@@ -353,7 +328,6 @@ internal static partial class RoutePopupController
     private static bool LoadPresetIntoControls(
         string name,
         RoutingSelectionMode selectionMode,
-        Action<string> setRouteColorRaw,
         IReadOnlyDictionary<RouteMetricType, (SpinBox Min, SpinBox Max)> constraintControls,
         IReadOnlyDictionary<RouteMetricType, PriorityControls> priorityControls)
     {
@@ -383,7 +357,6 @@ internal static partial class RoutePopupController
             }
         }
 
-        setRouteColorRaw(RoutingSettings.GetActivePresetHighlightColorRaw());
         return true;
     }
 
