@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Godot;
 using BetterMapTools.Features.MapDrawing;
+using BetterMapTools.Features.MapRouting.Modals;
 using BetterMapTools.Features.Settings;
 
 namespace BetterMapTools.Features.Common.Modals;
@@ -12,7 +13,6 @@ internal static class SharedColorPickerModal
     private const string PopupName = "BetterMapToolsSharedColorPickerModal";
     private const float WindowWidth = 1080f;
     private const float WindowHeight = 640f;
-    private const float WindowMargin = 28f;
 
     internal sealed class Request
     {
@@ -121,7 +121,8 @@ internal static class SharedColorPickerModal
         };
         root.AddChild(contentScroll);
 
-        var section = AddSection(contentScroll, "Color");
+        var contentColumn = MapModalLayout.CreateScrollContentColumn(contentScroll);
+        var section = AddSection(contentColumn, "Color");
         section.SizeFlagsVertical = Control.SizeFlags.ShrinkBegin;
         section.AddChild(CreateMutedLabel(request.Description, new Color(0.84f, 0.88f, 0.92f, 0.96f), 15));
 
@@ -143,7 +144,35 @@ internal static class SharedColorPickerModal
             CustomMinimumSize = new Vector2(0f, 360f)
         };
         ConfigurePickerUi(picker);
-        section.AddChild(picker);
+
+        var pickerRow = new HBoxContainer
+        {
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+            SizeFlagsVertical = Control.SizeFlags.ShrinkBegin
+        };
+        pickerRow.AddThemeConstantOverride("separation", 12);
+        section.AddChild(pickerRow);
+        pickerRow.AddChild(picker);
+
+        var previewColumn = new VBoxContainer
+        {
+            CustomMinimumSize = new Vector2(188f, 0f),
+            SizeFlagsVertical = Control.SizeFlags.ShrinkBegin
+        };
+        previewColumn.AddThemeConstantOverride("separation", 8);
+        pickerRow.AddChild(previewColumn);
+        previewColumn.AddChild(CreateMutedLabel("Preview", new Color(0.9f, 0.92f, 0.96f, 0.92f), 15));
+
+        var preview = new ColorRect
+        {
+            CustomMinimumSize = new Vector2(188f, 188f),
+            MouseFilter = Control.MouseFilterEnum.Ignore
+        };
+        previewColumn.AddChild(preview);
+
+        var previewValue = CreateMutedLabel(string.Empty, new Color(0.82f, 0.88f, 0.94f, 0.94f), 14);
+        previewValue.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        previewColumn.AddChild(previewValue);
 
         var colorRow = new HBoxContainer
         {
@@ -161,13 +190,6 @@ internal static class SharedColorPickerModal
         };
         colorRow.AddChild(colorInput);
 
-        var preview = new ColorRect
-        {
-            CustomMinimumSize = new Vector2(32f, 32f),
-            MouseFilter = Control.MouseFilterEnum.Ignore
-        };
-        colorRow.AddChild(preview);
-
         var statusLabel = CreateMutedLabel(string.Empty, new Color(0.82f, 0.86f, 0.92f, 0.88f), 14);
         section.AddChild(statusLabel);
 
@@ -178,6 +200,7 @@ internal static class SharedColorPickerModal
             {
                 preview.Color = parsed;
                 preview.Modulate = Colors.White;
+                previewValue.Text = raw;
                 statusLabel.Text = "Selected color will be applied when you confirm.";
                 statusLabel.AddThemeColorOverride("font_color", new Color(0.72f, 0.86f, 0.98f, 0.92f));
             }
@@ -185,6 +208,7 @@ internal static class SharedColorPickerModal
             {
                 preview.Color = new Color(0.2f, 0.2f, 0.2f, 1f);
                 preview.Modulate = new Color(0.94f, 0.42f, 0.42f, 1f);
+                previewValue.Text = raw;
                 statusLabel.Text = "Invalid color. Use #RRGGBB, #RRGGBBAA, or r,g,b,a.";
                 statusLabel.AddThemeColorOverride("font_color", new Color(0.95f, 0.56f, 0.56f, 0.96f));
             }
@@ -259,8 +283,7 @@ internal static class SharedColorPickerModal
             overlay.QueueFree();
         };
 
-        AttachWindowPlacement(placementRoot, window);
-        AttachDragBehavior(titleBar, placementRoot, window);
+        MapModalLayout.AttachResponsiveWindow(placementRoot, window, titleBar, WindowWidth, WindowHeight);
         return overlay;
     }
 
@@ -430,85 +453,4 @@ internal static class SharedColorPickerModal
         };
     }
 
-    private static void AttachWindowPlacement(Control placementRoot, Control window)
-    {
-        var hasCustomPosition = false;
-
-        void PlaceWindow()
-        {
-            if (!GodotObject.IsInstanceValid(placementRoot) || !GodotObject.IsInstanceValid(window))
-            {
-                return;
-            }
-
-            var viewportSize = placementRoot.Size;
-            if (viewportSize.X <= 0f || viewportSize.Y <= 0f)
-            {
-                viewportSize = placementRoot.GetWindow()?.ContentScaleSize ?? viewportSize;
-            }
-
-            var desired = hasCustomPosition
-                ? window.Position
-                : new Vector2(
-                    (viewportSize.X - window.Size.X) * 0.5f,
-                    (viewportSize.Y - window.Size.Y) * 0.5f);
-            window.Position = ClampWindowPosition(viewportSize, window.Size, desired);
-        }
-
-        window.Resized += PlaceWindow;
-        placementRoot.Resized += PlaceWindow;
-        Callable.From(PlaceWindow).CallDeferred();
-        PlaceWindow();
-
-        window.SetMeta("bettermaptools_has_custom_position", hasCustomPosition);
-        window.Connect(Control.SignalName.GuiInput, Callable.From<InputEvent>(_ =>
-        {
-            if (window.HasMeta("bettermaptools_has_custom_position"))
-            {
-                hasCustomPosition = window.GetMeta("bettermaptools_has_custom_position").AsBool();
-            }
-        }));
-    }
-
-    private static void AttachDragBehavior(Control dragHandle, Control placementRoot, Control window)
-    {
-        var dragging = false;
-        var dragOffset = Vector2.Zero;
-
-        dragHandle.GuiInput += @event =>
-        {
-            switch (@event)
-            {
-                case InputEventMouseButton mouseButton when mouseButton.ButtonIndex == MouseButton.Left:
-                    if (mouseButton.Pressed)
-                    {
-                        dragging = true;
-                        dragOffset = mouseButton.GlobalPosition - window.GlobalPosition;
-                        window.SetMeta("bettermaptools_has_custom_position", true);
-                        dragHandle.AcceptEvent();
-                    }
-                    else
-                    {
-                        dragging = false;
-                        dragHandle.AcceptEvent();
-                    }
-                    break;
-                case InputEventMouseMotion mouseMotion when dragging:
-                    var desiredGlobal = mouseMotion.GlobalPosition - dragOffset;
-                    var desiredLocal = placementRoot.GetGlobalTransformWithCanvas().AffineInverse() * desiredGlobal;
-                    window.Position = ClampWindowPosition(placementRoot.Size, window.Size, desiredLocal);
-                    dragHandle.AcceptEvent();
-                    break;
-            }
-        };
-    }
-
-    private static Vector2 ClampWindowPosition(Vector2 viewportSize, Vector2 windowSize, Vector2 desiredPosition)
-    {
-        var maxX = MathF.Max(WindowMargin, viewportSize.X - windowSize.X - WindowMargin);
-        var maxY = MathF.Max(WindowMargin, viewportSize.Y - windowSize.Y - WindowMargin);
-        return new Vector2(
-            Mathf.Clamp(desiredPosition.X, WindowMargin, maxX),
-            Mathf.Clamp(desiredPosition.Y, WindowMargin, maxY));
-    }
 }

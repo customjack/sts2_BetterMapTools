@@ -33,6 +33,7 @@
     <EmbeddedResource Include="resources/route_icon_glow.png" LogicalName="BetterMapTools.RouteIconGlowPng" />
     <EmbeddedResource Include="resources/color_icon.png" LogicalName="BetterMapTools.ColorIconPng" />
     <EmbeddedResource Include="resources/color_icon_glow.png" LogicalName="BetterMapTools.ColorIconGlowPng" />
+    <EmbeddedResource Include="resources/eye_dropper_icon.png" LogicalName="BetterMapTools.EyeDropperIconPng" />
     <EmbeddedResource Include="resources/undo_icon.png" LogicalName="BetterMapTools.UndoIconPng" />
     <EmbeddedResource Include="resources/undo_icon_glow.png" LogicalName="BetterMapTools.UndoIconGlowPng" />
   </ItemGroup>

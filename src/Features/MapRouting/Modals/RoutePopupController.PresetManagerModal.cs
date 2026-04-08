@@ -109,8 +109,8 @@ internal static partial class RoutePopupController
         };
         root.AddChild(contentScroll);
 
-        // Content section
-        var contentSection = AddSection(contentScroll, "Presets");
+        var contentColumn = MapModalLayout.CreateScrollContentColumn(contentScroll);
+        var contentSection = AddSection(contentColumn, "Presets");
         contentSection.SizeFlagsVertical = Control.SizeFlags.ShrinkBegin;
 
         var status = new Label
@@ -262,48 +262,7 @@ internal static partial class RoutePopupController
 
         RefreshList(RoutingSettings.ActivePresetName);
 
-        AttachPresetManagerPlacement(mapScreen, managerWindow);
-        AttachDragBehavior(titleBar, mapScreen, managerWindow);
-    }
-
-    private static void AttachPresetManagerPlacement(NMapScreen mapScreen, Control managerWindow)
-    {
-        var hasCustomPosition = false;
-
-        void PlaceWindow()
-        {
-            if (!GodotObject.IsInstanceValid(mapScreen) || !GodotObject.IsInstanceValid(managerWindow))
-            {
-                return;
-            }
-
-            var viewportSize = mapScreen.Size;
-            if (viewportSize.X <= 0f || viewportSize.Y <= 0f)
-            {
-                viewportSize = mapScreen.GetWindow()?.ContentScaleSize ?? viewportSize;
-            }
-
-            var desired = hasCustomPosition
-                ? managerWindow.Position
-                : new Vector2(
-                    (viewportSize.X - managerWindow.Size.X) * 0.5f,
-                    (viewportSize.Y - managerWindow.Size.Y) * 0.5f);
-            managerWindow.Position = ClampWindowPosition(viewportSize, managerWindow.Size, desired);
-        }
-
-        managerWindow.Resized += PlaceWindow;
-        mapScreen.Resized += PlaceWindow;
-        Callable.From(PlaceWindow).CallDeferred();
-        PlaceWindow();
-
-        managerWindow.SetMeta("bettermaptools_has_custom_position", hasCustomPosition);
-        managerWindow.Connect(Control.SignalName.GuiInput, Callable.From<InputEvent>(_ =>
-        {
-            if (managerWindow.HasMeta("bettermaptools_has_custom_position"))
-            {
-                hasCustomPosition = managerWindow.GetMeta("bettermaptools_has_custom_position").AsBool();
-            }
-        }));
+        MapModalLayout.AttachResponsiveWindow(mapScreen, managerWindow, titleBar, PresetManagerWidth, PresetManagerHeight);
     }
 
     private static void SavePresetFromControls(

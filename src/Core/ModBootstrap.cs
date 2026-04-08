@@ -11,7 +11,7 @@ namespace BetterMapTools.Core;
 public static class ModBootstrap
 {
     private const string HarmonyId = "bettermaptools.harmony";
-    private const string BuildMarker = "2026-04-06-release-a";
+    private const string BuildMarker = "2026-04-08-release-a";
 
     private static bool _initialized;
 

@@ -1,6 +1,7 @@
 using Godot;
 using BetterMapTools.Features.MapDrawing.Multiplayer;
 using BetterMapTools.Features.Common.Modals;
+using BetterMapTools.Features.MapRouting.Buttons;
 using BetterMapTools.Features.Settings;
 using MegaCrit.Sts2.Core.Nodes.Screens.Map;
 
@@ -14,9 +15,13 @@ namespace BetterMapTools.Features.MapDrawing;
 internal static class ColorQuickBarFeature
 {
     private const string QuickBarName = "BetterMapToolsColorQuickBar";
+    private const string ColorIconResourceName = "BetterMapTools.EyeDropperIconPng";
+    private const string ColorIconGlowResourceName = "BetterMapTools.EyeDropperIconPng";
     private const float SwatchSize = 28f;
     private const float SwatchGap = 4f;
     private const int MaxSwatches = 10;
+    private static Texture2D? _colorIconTexture;
+    private static Texture2D? _colorIconGlowTexture;
 
     public static void AttachToMapScreen(NMapScreen mapScreen)
     {
@@ -83,6 +88,9 @@ internal static class ColorQuickBarFeature
 
     private static void PopulateBar(Control bar, NMapScreen mapScreen)
     {
+        var dropperButton = CreateCompactColorDropperButton(mapScreen);
+        bar.AddChild(dropperButton);
+
         // + button — opens color picker directly
         var addButton = new Button
         {
@@ -93,26 +101,7 @@ internal static class ColorQuickBarFeature
             FocusMode = Control.FocusModeEnum.All
         };
         StyleSwatch(addButton, isAdd: true);
-        addButton.Pressed += () =>
-        {
-            var currentRaw = MapDrawingColorOverrideService.TryGetLocalOverride(out var oc)
-                ? MapDrawingColorOverrideService.ToColorRaw(oc)
-                : RoutingSettings.SavedDrawingColorRaw
-                  ?? MapDrawingColorOverrideService.ToColorRaw(MapDrawingColorOverrideService.GetLocalDefaultColor());
-
-            // Pass hideHostChildren: false so the map screen is not hidden when the picker opens.
-            SharedColorPickerModal.Open(mapScreen, mapScreen, new SharedColorPickerModal.Request
-            {
-                Title = "BetterMapTools",
-                Subtitle = "Drawing Color",
-                Description = "Choose the color used for future manual map drawings.",
-                InitialColorRaw = currentRaw,
-                PlaceholderText = MapDrawingColorOverrideService.ToColorRaw(MapDrawingColorOverrideService.GetLocalDefaultColor()),
-                AllowAlpha = false,
-                ApplyButtonText = "Apply",
-                OnApply = value => ApplyColor(value)
-            }, hideHostChildren: false);
-        };
+        addButton.Pressed += () => OpenColorPicker(mapScreen);
         bar.AddChild(addButton);
 
         // Recent color swatches
@@ -181,7 +170,65 @@ internal static class ColorQuickBarFeature
         }
     }
 
-    private static void ApplyColor(string raw)
+    private static Button CreateCompactColorDropperButton(NMapScreen mapScreen)
+    {
+        var button = new Button
+        {
+            CustomMinimumSize = new Vector2(SwatchSize, SwatchSize),
+            Size = new Vector2(SwatchSize, SwatchSize),
+            TooltipText = "Sample drawing color from screen",
+            FocusMode = Control.FocusModeEnum.All
+        };
+        StyleSwatch(button, isAdd: false, color: new Color(0.18f, 0.24f, 0.30f, 0.90f));
+
+        var icon = new TextureRect
+        {
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+            StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+            ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+            CustomMinimumSize = new Vector2(18f, 18f),
+            Position = new Vector2((SwatchSize - 18f) * 0.5f, (SwatchSize - 18f) * 0.5f),
+            Size = new Vector2(18f, 18f)
+        };
+        icon.Texture = LoadCompactColorIcon(hovered: false);
+        button.AddChild(icon);
+
+        button.MouseEntered += () => icon.Texture = LoadCompactColorIcon(hovered: true);
+        button.MouseExited += () => icon.Texture = LoadCompactColorIcon(hovered: false);
+        button.FocusEntered += () => icon.Texture = LoadCompactColorIcon(hovered: true);
+        button.FocusExited += () => icon.Texture = LoadCompactColorIcon(hovered: false);
+        button.Pressed += () => ScreenColorDropperController.Toggle(mapScreen);
+        return button;
+    }
+
+    private static Texture2D? LoadCompactColorIcon(bool hovered)
+    {
+        _colorIconTexture ??= MapToolButtonFeatureBase.LoadEmbeddedPngTexture(ColorIconResourceName);
+        _colorIconGlowTexture ??= MapToolButtonFeatureBase.LoadEmbeddedPngTexture(ColorIconGlowResourceName);
+        return hovered ? (_colorIconGlowTexture ?? _colorIconTexture) : _colorIconTexture;
+    }
+
+    private static void OpenColorPicker(NMapScreen mapScreen)
+    {
+        var currentRaw = MapDrawingColorOverrideService.TryGetLocalOverride(out var overrideColor)
+            ? MapDrawingColorOverrideService.ToColorRaw(overrideColor)
+            : RoutingSettings.SavedDrawingColorRaw
+              ?? MapDrawingColorOverrideService.ToColorRaw(MapDrawingColorOverrideService.GetLocalDefaultColor());
+
+        SharedColorPickerModal.Open(mapScreen, mapScreen, new SharedColorPickerModal.Request
+        {
+            Title = "BetterMapTools",
+            Subtitle = "Drawing Color",
+            Description = "Choose the color used for future manual map drawings.",
+            InitialColorRaw = currentRaw,
+            PlaceholderText = MapDrawingColorOverrideService.ToColorRaw(MapDrawingColorOverrideService.GetLocalDefaultColor()),
+            AllowAlpha = false,
+            ApplyButtonText = "Apply",
+            OnApply = ApplyColor
+        }, hideHostChildren: false);
+    }
+
+    internal static void ApplyColor(string raw)
     {
         if (!RoutingSettings.TryResolveColor(raw, out var selected))
         {

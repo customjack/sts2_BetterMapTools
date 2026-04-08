@@ -10,7 +10,6 @@ internal static partial class RoutePopupController
 {
     private const string PopupName = "BetterMapToolsPopup";
     private const string PresetManagerName = "BetterMapToolsPresetManager";
-    private const string UseSeparateResultsPanelMetaKey = "bettermaptools_use_separate_results_panel";
 
     private static readonly Dictionary<RouteMetricType, (int Min, int Max)> ConstraintState = new();
     private static readonly Dictionary<RouteMetricType, (RouteObjectiveMode Mode, int Priority)> PriorityState = new();
@@ -27,25 +26,11 @@ internal static partial class RoutePopupController
         var popup = mapScreen.GetNodeOrNull<Control>(PopupName);
         if (popup != null)
         {
-            if (popup.HasMeta(UseSeparateResultsPanelMetaKey))
-            {
-                var layoutModeMatches = popup.GetMeta(UseSeparateResultsPanelMetaKey).AsBool() == RoutingSettings.UseSeparateResultsPanel;
-                if (!layoutModeMatches)
-                {
-                    popup.QueueFree();
-                    popup = null;
-                }
-            }
-
-            if (popup != null)
-            {
-                popup.Visible = !popup.Visible;
-                return;
-            }
+            popup.Visible = !popup.Visible;
+            return;
         }
 
         popup = BuildPopup(mapScreen);
-        popup.SetMeta(UseSeparateResultsPanelMetaKey, RoutingSettings.UseSeparateResultsPanel);
         mapScreen.AddChild(popup);
     }
 

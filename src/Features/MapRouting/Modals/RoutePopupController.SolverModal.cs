@@ -17,8 +17,6 @@ internal static partial class RoutePopupController
     private const string SolverWindowName = "BetterMapToolsSolverWindow";
     private const float WindowWidth = 1080f;
     private const float WindowHeight = 640f;
-    private const float WindowMargin = 28f;
-
     private static Control BuildPopup(NMapScreen mapScreen)
     {
         var metrics = RouteMetricRegistry.Definitions;
@@ -111,36 +109,23 @@ internal static partial class RoutePopupController
         headerButtons.AddThemeConstantOverride("separation", 8);
         titleRow.AddChild(headerButtons);
 
+        var applyButton = new Button { Text = "Apply Route", CustomMinimumSize = new Vector2(126f, 34f) };
         var managerButton = new Button { Text = "Presets", CustomMinimumSize = new Vector2(96f, 34f) };
         var closeButton = new Button { Text = "Close", CustomMinimumSize = new Vector2(96f, 34f) };
+        headerButtons.AddChild(applyButton);
         headerButtons.AddChild(managerButton);
         headerButtons.AddChild(closeButton);
 
-        var contentRow = new HBoxContainer
-        {
-            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-            SizeFlagsVertical = Control.SizeFlags.ExpandFill
-        };
-        contentRow.AddThemeConstantOverride("separation", 12);
-        root.AddChild(contentRow);
-
-        var configScroll = new ScrollContainer
+        var contentScroll = new ScrollContainer
         {
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
             SizeFlagsVertical = Control.SizeFlags.ExpandFill,
             FollowFocus = true,
             CustomMinimumSize = new Vector2(0f, 0f)
         };
-        contentRow.AddChild(configScroll);
+        root.AddChild(contentScroll);
 
-        var configColumn = new VBoxContainer
-        {
-            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-            SizeFlagsVertical = Control.SizeFlags.ExpandFill,
-            CustomMinimumSize = new Vector2(RoutingSettings.UseSeparateResultsPanel ? 640f : 0f, 0f)
-        };
-        configColumn.AddThemeConstantOverride("separation", 12);
-        configScroll.AddChild(configColumn);
+        var configColumn = MapModalLayout.CreateScrollContentColumn(contentScroll);
 
         var currentSelectionMode = SelectionModeState;
 
@@ -331,37 +316,11 @@ internal static partial class RoutePopupController
         tableGrid.AddThemeConstantOverride("v_separation", 0);
         tableScroll.AddChild(tableGrid);
 
-        if (RoutingSettings.UseSeparateResultsPanel)
-        {
-            var resultsColumn = new VBoxContainer
-            {
-                SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-                SizeFlagsVertical = Control.SizeFlags.ExpandFill,
-                CustomMinimumSize = new Vector2(404f, 0f)
-            };
-            resultsColumn.AddThemeConstantOverride("separation", 12);
-            contentRow.AddChild(resultsColumn);
+        var resultsContent = AddSection(configColumn, "Route Summary");
+        resultsContent.AddChild(summary);
+        resultsContent.AddChild(tableScroll);
 
-            var resultsContent = AddSection(resultsColumn, "Route Summary");
-            resultsContent.AddChild(summary);
-            resultsContent.AddChild(tableScroll);
-        }
-        else
-        {
-            var resultsContent = AddSection(configColumn, "Route Summary");
-            resultsContent.AddChild(summary);
-            resultsContent.AddChild(tableScroll);
-        }
-
-        var actionRow = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-        actionRow.AddThemeConstantOverride("separation", 8);
-        configColumn.AddChild(actionRow);
-        actionRow.AddChild(new Control { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill });
-
-        var apply = new Button { Text = "Apply Route", CustomMinimumSize = new Vector2(126f, 34f) };
-        actionRow.AddChild(apply);
-
-        apply.Pressed += () => ApplyRouting(
+        applyButton.Pressed += () => ApplyRouting(
             mapScreen,
             currentSelectionMode,
             constraintControls,
@@ -375,8 +334,7 @@ internal static partial class RoutePopupController
             OpenPresetManager(overlay, mapScreen, currentSelectionMode, activePresetLabel, constraintControls, priorityControls);
         };
 
-        AttachWindowPlacement(mapScreen, solverWindow);
-        AttachDragBehavior(titleBar, mapScreen, solverWindow);
+        MapModalLayout.AttachResponsiveWindow(mapScreen, solverWindow, titleBar, WindowWidth, WindowHeight);
         PopulateMetricTable(tableGrid, Array.Empty<RouteMetricSummary>());
         return overlay;
     }
@@ -602,88 +560,6 @@ internal static partial class RoutePopupController
             BorderWidthRight = 1,
             BorderWidthBottom = 1
         };
-    }
-
-    private static void AttachWindowPlacement(Control mapScreen, Control window)
-    {
-        var hasCustomPosition = false;
-
-        void PlaceWindow()
-        {
-            if (!GodotObject.IsInstanceValid(mapScreen) || !GodotObject.IsInstanceValid(window))
-            {
-                return;
-            }
-
-            var viewportSize = mapScreen.Size;
-            if (viewportSize.X <= 0f || viewportSize.Y <= 0f)
-            {
-                viewportSize = mapScreen.GetWindow()?.ContentScaleSize ?? viewportSize;
-            }
-
-            var desired = hasCustomPosition
-                ? window.Position
-                : new Vector2(
-                    (viewportSize.X - window.Size.X) * 0.5f,
-                    (viewportSize.Y - window.Size.Y) * 0.5f);
-            window.Position = ClampWindowPosition(viewportSize, window.Size, desired);
-        }
-
-        window.Resized += PlaceWindow;
-        mapScreen.Resized += PlaceWindow;
-        Callable.From(PlaceWindow).CallDeferred();
-        PlaceWindow();
-
-        window.SetMeta("bettermaptools_has_custom_position", hasCustomPosition);
-        window.Connect(Control.SignalName.GuiInput, Callable.From<InputEvent>(_ =>
-        {
-            if (window.HasMeta("bettermaptools_has_custom_position"))
-            {
-                hasCustomPosition = window.GetMeta("bettermaptools_has_custom_position").AsBool();
-            }
-        }));
-    }
-
-    private static void AttachDragBehavior(Control dragHandle, Control mapScreen, Control window)
-    {
-        var dragging = false;
-        var dragOffset = Vector2.Zero;
-
-        dragHandle.GuiInput += @event =>
-        {
-            switch (@event)
-            {
-                case InputEventMouseButton mouseButton when mouseButton.ButtonIndex == MouseButton.Left:
-                    if (mouseButton.Pressed)
-                    {
-                        dragging = true;
-                        dragOffset = mouseButton.GlobalPosition - window.GlobalPosition;
-                        window.SetMeta("bettermaptools_has_custom_position", true);
-                        dragHandle.AcceptEvent();
-                    }
-                    else
-                    {
-                        dragging = false;
-                        dragHandle.AcceptEvent();
-                    }
-                    break;
-                case InputEventMouseMotion mouseMotion when dragging:
-                    var desiredGlobal = mouseMotion.GlobalPosition - dragOffset;
-                    var desiredLocal = mapScreen.GetGlobalTransformWithCanvas().AffineInverse() * desiredGlobal;
-                    window.Position = ClampWindowPosition(mapScreen.Size, window.Size, desiredLocal);
-                    dragHandle.AcceptEvent();
-                    break;
-            }
-        };
-    }
-
-    private static Vector2 ClampWindowPosition(Vector2 viewportSize, Vector2 windowSize, Vector2 desiredPosition)
-    {
-        var maxX = MathF.Max(WindowMargin, viewportSize.X - windowSize.X - WindowMargin);
-        var maxY = MathF.Max(WindowMargin, viewportSize.Y - windowSize.Y - WindowMargin);
-        return new Vector2(
-            Mathf.Clamp(desiredPosition.X, WindowMargin, maxX),
-            Mathf.Clamp(desiredPosition.Y, WindowMargin, maxY));
     }
 
     private static void ApplyRouting(

@@ -1,6 +1,7 @@
 using BetterMapTools.Features.Common.Modals;
 using Godot;
 using BetterMapTools.Features.MapDrawing.Multiplayer;
+using BetterMapTools.Features.MapRouting.Modals;
 using BetterMapTools.Features.Settings;
 using MegaCrit.Sts2.Core.Nodes.Screens.Map;
 
@@ -11,7 +12,6 @@ internal static class DrawingColorPopupController
     private const string PopupName = "BetterMapToolsDrawingColorPopup";
     private const float WindowWidth = 1080f;
     private const float WindowHeight = 640f;
-    private const float WindowMargin = 28f;
 
     public static void Toggle(NMapScreen mapScreen)
     {
@@ -115,13 +115,7 @@ internal static class DrawingColorPopupController
         };
         root.AddChild(contentScroll);
 
-        var contentColumn = new VBoxContainer
-        {
-            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-            SizeFlagsVertical = Control.SizeFlags.ShrinkBegin
-        };
-        contentColumn.AddThemeConstantOverride("separation", 12);
-        contentScroll.AddChild(contentColumn);
+        var contentColumn = MapModalLayout.CreateScrollContentColumn(contentScroll);
 
         var instructions = AddSection(contentColumn, "Drawing Color");
         instructions.SizeFlagsVertical = Control.SizeFlags.ShrinkBegin;
@@ -343,8 +337,7 @@ internal static class DrawingColorPopupController
 
         closeButton.Pressed += overlay.QueueFree;
 
-        AttachWindowPlacement(mapScreen, window);
-        AttachDragBehavior(titleBar, mapScreen, window);
+        MapModalLayout.AttachResponsiveWindow(mapScreen, window, titleBar, WindowWidth, WindowHeight);
         return overlay;
     }
 
@@ -482,85 +475,4 @@ internal static class DrawingColorPopupController
         };
     }
 
-    private static void AttachWindowPlacement(Control mapScreen, Control window)
-    {
-        var hasCustomPosition = false;
-
-        void PlaceWindow()
-        {
-            if (!GodotObject.IsInstanceValid(mapScreen) || !GodotObject.IsInstanceValid(window))
-            {
-                return;
-            }
-
-            var viewportSize = mapScreen.Size;
-            if (viewportSize.X <= 0f || viewportSize.Y <= 0f)
-            {
-                viewportSize = mapScreen.GetWindow()?.ContentScaleSize ?? viewportSize;
-            }
-
-            var desired = hasCustomPosition
-                ? window.Position
-                : new Vector2(
-                    (viewportSize.X - window.Size.X) * 0.5f,
-                    (viewportSize.Y - window.Size.Y) * 0.5f);
-            window.Position = ClampWindowPosition(viewportSize, window.Size, desired);
-        }
-
-        window.Resized += PlaceWindow;
-        mapScreen.Resized += PlaceWindow;
-        Callable.From(PlaceWindow).CallDeferred();
-        PlaceWindow();
-
-        window.SetMeta("bettermaptools_has_custom_position", hasCustomPosition);
-        window.Connect(Control.SignalName.GuiInput, Callable.From<InputEvent>(_ =>
-        {
-            if (window.HasMeta("bettermaptools_has_custom_position"))
-            {
-                hasCustomPosition = window.GetMeta("bettermaptools_has_custom_position").AsBool();
-            }
-        }));
-    }
-
-    private static void AttachDragBehavior(Control dragHandle, Control mapScreen, Control window)
-    {
-        var dragging = false;
-        var dragOffset = Vector2.Zero;
-
-        dragHandle.GuiInput += @event =>
-        {
-            switch (@event)
-            {
-                case InputEventMouseButton mouseButton when mouseButton.ButtonIndex == MouseButton.Left:
-                    if (mouseButton.Pressed)
-                    {
-                        dragging = true;
-                        dragOffset = mouseButton.GlobalPosition - window.GlobalPosition;
-                        window.SetMeta("bettermaptools_has_custom_position", true);
-                        dragHandle.AcceptEvent();
-                    }
-                    else
-                    {
-                        dragging = false;
-                        dragHandle.AcceptEvent();
-                    }
-                    break;
-                case InputEventMouseMotion mouseMotion when dragging:
-                    var desiredGlobal = mouseMotion.GlobalPosition - dragOffset;
-                    var desiredLocal = mapScreen.GetGlobalTransformWithCanvas().AffineInverse() * desiredGlobal;
-                    window.Position = ClampWindowPosition(mapScreen.Size, window.Size, desiredLocal);
-                    dragHandle.AcceptEvent();
-                    break;
-            }
-        };
-    }
-
-    private static Vector2 ClampWindowPosition(Vector2 viewportSize, Vector2 windowSize, Vector2 desiredPosition)
-    {
-        var maxX = MathF.Max(WindowMargin, viewportSize.X - windowSize.X - WindowMargin);
-        var maxY = MathF.Max(WindowMargin, viewportSize.Y - windowSize.Y - WindowMargin);
-        return new Vector2(
-            Mathf.Clamp(desiredPosition.X, WindowMargin, maxX),
-            Mathf.Clamp(desiredPosition.Y, WindowMargin, maxY));
-    }
 }
