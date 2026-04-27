@@ -273,10 +273,9 @@ internal static partial class RoutePopupController
         Label status)
     {
         var constraints = ReadConstraintState(constraintControls);
-        var priorities = selectionMode == RoutingSelectionMode.Weighted
-            ? PriorityState.ToDictionary(pair => pair.Key, pair => pair.Value)
-            : ReadPriorityState(priorityControls);
-        RoutingSettings.SavePreset(name, constraints, priorities);
+        var priorities = new Dictionary<RouteMetricType, (RouteObjectiveMode Mode, int Priority)>(PriorityState);
+        var weights = new Dictionary<RouteMetricType, int>(WeightedState);
+        RoutingSettings.SavePreset(name, constraints, priorities, weights);
 
         RoutingSettings.SetActivePreset(name);
         RoutingSettingsRegistration.RefreshPresetSettings();
@@ -299,17 +298,23 @@ internal static partial class RoutePopupController
         {
             var constraint = RoutingSettings.GetConstraintDefaults(metric);
             var priority = RoutingSettings.GetPriorityDefaults(metric);
+            var weight = RoutingSettings.GetWeightDefault(metric);
 
             ConstraintState[metric.Type] = (constraint.Min, constraint.Max);
             SetPriorityState(metric.Type, priority.Mode, priority.Priority);
+            SetWeightedState(metric.Type, weight);
 
             var controls = constraintControls[metric.Type];
             controls.Min.Value = constraint.Min;
             controls.Max.Value = constraint.Max;
 
-            if (selectionMode == RoutingSelectionMode.Lexicographic)
+            var priorityControl = priorityControls[metric.Type];
+            if (selectionMode == RoutingSelectionMode.Weighted)
             {
-                var priorityControl = priorityControls[metric.Type];
+                priorityControl.Priority.Value = weight;
+            }
+            else
+            {
                 var selectedIndex = priorityControl.Options.ToList().FindIndex(option => option == priority.Mode);
                 priorityControl.Mode.Select(selectedIndex >= 0 ? selectedIndex : 0);
                 priorityControl.Priority.Value = priority.Priority;

@@ -45,10 +45,7 @@ internal static partial class RoutePopupController
 
             var priorityDefaults = RoutingSettings.GetPriorityDefaults(metric);
             PriorityState[metric.Type] = (priorityDefaults.Mode, priorityDefaults.Priority);
-            if (!WeightedState.ContainsKey(metric.Type))
-            {
-                WeightedState[metric.Type] = 0;
-            }
+            WeightedState[metric.Type] = RoutingSettings.GetWeightDefault(metric);
         }
     }
 

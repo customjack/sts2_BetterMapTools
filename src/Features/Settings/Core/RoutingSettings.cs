@@ -17,6 +17,7 @@ internal static partial class RoutingSettings
         public required string Name { get; init; }
         public required Dictionary<RouteMetricType, ConstraintDefaults> Constraints { get; init; }
         public required Dictionary<RouteMetricType, PriorityDefaults> Priorities { get; init; }
+        public required Dictionary<RouteMetricType, int> Weights { get; init; }
     }
 
     public const string DefaultHighlightColor = "#FFF2A6FF";
@@ -28,6 +29,7 @@ internal static partial class RoutingSettings
 
     private static readonly Dictionary<RouteMetricType, ConstraintDefaults> ConstraintDefaultsByMetric = new();
     private static readonly Dictionary<RouteMetricType, PriorityDefaults> PriorityDefaultsByMetric = new();
+    private static readonly Dictionary<RouteMetricType, int> WeightDefaultsByMetric = new();
     private static readonly Dictionary<string, RoutingPreset> PresetsByKey = new(StringComparer.OrdinalIgnoreCase);
 
     public static void EnsureDefaultsInitialized()
@@ -45,11 +47,16 @@ internal static partial class RoutingSettings
             {
                 PriorityDefaultsByMetric[definition.Type] = new PriorityDefaults(definition.DefaultObjectiveMode, definition.DefaultPriority);
             }
+
+            if (!WeightDefaultsByMetric.ContainsKey(definition.Type))
+            {
+                WeightDefaultsByMetric[definition.Type] = 0;
+            }
         }
 
         if (PresetsByKey.Count == 0)
         {
-            SavePreset(DefaultPresetName, ConstraintDefaultsByMetric, PriorityDefaultsByMetric);
+            SavePreset(DefaultPresetName, ConstraintDefaultsByMetric, PriorityDefaultsByMetric, WeightDefaultsByMetric);
             ActivePresetName = DefaultPresetName;
         }
     }
@@ -99,9 +106,11 @@ internal static partial class RoutingSettings
             var priority = preset.Priorities.TryGetValue(definition.Type, out var p)
                 ? p
                 : new PriorityDefaults(definition.DefaultObjectiveMode, definition.DefaultPriority);
+            var weight = preset.Weights.TryGetValue(definition.Type, out var w) ? w : 0;
 
             ConstraintDefaultsByMetric[definition.Type] = constraint;
             PriorityDefaultsByMetric[definition.Type] = priority;
+            WeightDefaultsByMetric[definition.Type] = weight;
         }
 
         ActivePresetName = preset.Name;
@@ -129,6 +138,7 @@ internal static partial class RoutingSettings
     {
         ConstraintDefaultsByMetric.Clear();
         PriorityDefaultsByMetric.Clear();
+        WeightDefaultsByMetric.Clear();
         PresetsByKey.Clear();
         ActivePresetName = DefaultPresetName;
         UseSeparateResultsPanel = DefaultUseSeparateResultsPanel;
@@ -193,7 +203,18 @@ internal static partial class RoutingSettings
 
     public static void SetPriorityDefaults(RouteMetricType metric, RouteObjectiveMode mode, int priority)
     {
-        PriorityDefaultsByMetric[metric] = new PriorityDefaults(mode, Math.Max(0, priority));
+        PriorityDefaultsByMetric[metric] = new PriorityDefaults(mode, priority);
+    }
+
+    public static int GetWeightDefault(RouteMetricDefinition definition)
+    {
+        EnsureDefaultsInitialized();
+        return WeightDefaultsByMetric.TryGetValue(definition.Type, out var w) ? w : 0;
+    }
+
+    public static void SetWeightDefault(RouteMetricType metric, int weight)
+    {
+        WeightDefaultsByMetric[metric] = weight;
     }
 
     public static string ObjectiveModeToSettingValue(RouteObjectiveMode mode)

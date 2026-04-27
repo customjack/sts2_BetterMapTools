@@ -3,7 +3,7 @@
   "name": "BetterMapTools",
   "author": "Jack Carlton",
   "description": "Map tools framework with a route solver and reusable toolbar button API for future map utilities.",
-  "version": "1.3.1",
+  "version": "1.3.2",
   "has_pck": true,
   "has_dll": true,
   "dependencies": [

@@ -22,12 +22,14 @@ internal static partial class RoutingSettings
         public int Max { get; set; }
         public string Mode { get; set; } = "none";
         public int Priority { get; set; }
+        public int Weight { get; set; }
     }
 
     public static void SavePreset(
         string name,
         IReadOnlyDictionary<RouteMetricType, (int Min, int Max)> constraints,
-        IReadOnlyDictionary<RouteMetricType, (RouteObjectiveMode Mode, int Priority)> priorities)
+        IReadOnlyDictionary<RouteMetricType, (RouteObjectiveMode Mode, int Priority)> priorities,
+        IReadOnlyDictionary<RouteMetricType, int> weights)
     {
         EnsureDefaultsInitialized();
         var normalizedName = NormalizePresetName(name);
@@ -36,37 +38,41 @@ internal static partial class RoutingSettings
             return;
         }
 
+        var existing = PresetsByKey.TryGetValue(PresetKey(normalizedName), out var ex) ? ex : null;
+
         var constraintCopy = new Dictionary<RouteMetricType, ConstraintDefaults>();
         var priorityCopy = new Dictionary<RouteMetricType, PriorityDefaults>();
+        var weightCopy = new Dictionary<RouteMetricType, int>();
 
         foreach (var definition in RouteMetricRegistry.Definitions)
         {
             var fallbackConstraint = GetConstraintDefaults(definition);
             var fallbackPriority = GetPriorityDefaults(definition);
+            var fallbackWeight = existing != null && existing.Weights.TryGetValue(definition.Type, out var ew) ? ew : GetWeightDefault(definition);
 
-            var resolvedConstraint = constraints.TryGetValue(definition.Type, out var c)
+            constraintCopy[definition.Type] = constraints.TryGetValue(definition.Type, out var c)
                 ? new ConstraintDefaults(Math.Min(c.Min, c.Max), Math.Max(c.Min, c.Max))
                 : fallbackConstraint;
-            var resolvedPriority = priorities.TryGetValue(definition.Type, out var p)
-                ? new PriorityDefaults(p.Mode, Math.Max(0, p.Priority))
+            priorityCopy[definition.Type] = priorities.TryGetValue(definition.Type, out var p)
+                ? new PriorityDefaults(p.Mode, p.Priority)
                 : fallbackPriority;
-
-            constraintCopy[definition.Type] = resolvedConstraint;
-            priorityCopy[definition.Type] = resolvedPriority;
+            weightCopy[definition.Type] = weights.TryGetValue(definition.Type, out var w) ? w : fallbackWeight;
         }
 
         PresetsByKey[PresetKey(normalizedName)] = new RoutingPreset
         {
             Name = normalizedName,
             Constraints = constraintCopy,
-            Priorities = priorityCopy
+            Priorities = priorityCopy,
+            Weights = weightCopy
         };
     }
 
     public static void SavePreset(
         string name,
         IReadOnlyDictionary<RouteMetricType, ConstraintDefaults> constraints,
-        IReadOnlyDictionary<RouteMetricType, PriorityDefaults> priorities)
+        IReadOnlyDictionary<RouteMetricType, PriorityDefaults> priorities,
+        IReadOnlyDictionary<RouteMetricType, int> weights)
     {
         var normalizedName = NormalizePresetName(name);
         if (string.IsNullOrWhiteSpace(normalizedName))
@@ -79,13 +85,15 @@ internal static partial class RoutingSettings
             pair => new ConstraintDefaults(Math.Min(pair.Value.Min, pair.Value.Max), Math.Max(pair.Value.Min, pair.Value.Max)));
         var copiedPriorities = priorities.ToDictionary(
             pair => pair.Key,
-            pair => new PriorityDefaults(pair.Value.Mode, Math.Max(0, pair.Value.Priority)));
+            pair => new PriorityDefaults(pair.Value.Mode, pair.Value.Priority));
+        var copiedWeights = weights.ToDictionary(pair => pair.Key, pair => pair.Value);
 
         PresetsByKey[PresetKey(normalizedName)] = new RoutingPreset
         {
             Name = normalizedName,
             Constraints = copiedConstraints,
-            Priorities = copiedPriorities
+            Priorities = copiedPriorities,
+            Weights = copiedWeights
         };
     }
 
@@ -111,13 +119,15 @@ internal static partial class RoutingSettings
             var priority = preset.Priorities.TryGetValue(definition.Type, out var p)
                 ? p
                 : new PriorityDefaults(definition.DefaultObjectiveMode, definition.DefaultPriority);
+            var weight = preset.Weights.TryGetValue(definition.Type, out var w) ? w : 0;
 
             payload.Metrics[definition.Type.ToString()] = new PresetMetricPayload
             {
                 Min = constraint.Min,
                 Max = constraint.Max,
                 Mode = ObjectiveModeToSettingValue(priority.Mode),
-                Priority = priority.Priority
+                Priority = priority.Priority,
+                Weight = weight
             };
         }
 
@@ -153,12 +163,14 @@ internal static partial class RoutingSettings
 
         var constraints = new Dictionary<RouteMetricType, ConstraintDefaults>();
         var priorities = new Dictionary<RouteMetricType, PriorityDefaults>();
+        var weights = new Dictionary<RouteMetricType, int>();
         foreach (var definition in RouteMetricRegistry.Definitions)
         {
             if (!payload.Metrics.TryGetValue(definition.Type.ToString(), out var metricPayload))
             {
                 constraints[definition.Type] = new ConstraintDefaults(definition.DefaultMin, definition.DefaultMax);
                 priorities[definition.Type] = new PriorityDefaults(definition.DefaultObjectiveMode, definition.DefaultPriority);
+                weights[definition.Type] = 0;
                 continue;
             }
 
@@ -167,10 +179,11 @@ internal static partial class RoutingSettings
             constraints[definition.Type] = new ConstraintDefaults(min, max);
             priorities[definition.Type] = new PriorityDefaults(
                 ParseObjectiveMode(metricPayload.Mode, definition.DefaultObjectiveMode),
-                Math.Max(0, metricPayload.Priority));
+                metricPayload.Priority);
+            weights[definition.Type] = metricPayload.Weight;
         }
 
-        SavePreset(normalizedName, constraints, priorities);
+        SavePreset(normalizedName, constraints, priorities, weights);
         return true;
     }
 
